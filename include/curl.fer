@@ -1,0 +1,21 @@
+# the enum values are available in c++ module file (INIT_MODULE function)
+mload('curl');
+
+let io = import('std/io');
+let lang = import('std/lang');
+
+let DEFAULT_PROGRESS_FUNC = fn(total_down, down, total_up, up) {
+	let frac_down = down / total_down;
+	io.print((frac_down * 100).round(), '%\t\r');
+	io.flushout();
+};
+
+let DEFAULT_PROGRESS_FUNC_TICK = 10;
+
+set_default_progress_func_native(DEFAULT_PROGRESS_FUNC);
+set_default_progress_func_tick_native(DEFAULT_PROGRESS_FUNC_TICK);
+
+# cannot be chained, returns CURLcode
+let set_opt in curl_t = fn(opt, val = nil) {
+	return set_opt_native(self, opt, val);
+};

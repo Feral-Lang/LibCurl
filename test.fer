@@ -1,0 +1,22 @@
+let io = import('std/io');
+let fs = import('std/fs');
+let sys = import('std/sys');
+let curl = import('curl');
+
+let url = 'http://212.183.159.230/10MB.zip';
+let out = '10MB.zip';
+let out_file = fs.open('10MB.zip', 'w+');
+
+let c = curl.new_easy();
+c.set_opt(curl.OPT_URL, url);
+c.set_opt(curl.OPT_FOLLOWLOCATION, 1);
+c.set_opt(curl.OPT_NOPROGRESS, 0);
+c.set_opt(curl.OPT_WRITEDATA, out_file);
+let result = c.perform();
+
+io.println();
+if result != 0 {
+	io.println('failed to download file \'', url, '\' to \'', out, '\'');
+	sys.exit(result);
+}
+io.println('Downloaded file: ', out);
