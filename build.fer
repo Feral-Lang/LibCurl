@@ -8,7 +8,4 @@ let build = builder.new().make_dll();
 build.add_lib('-lcurl').add_lib('-lmpfr');
 build.add_src('src/curl/set_opt.cpp').add_src('src/curl.cpp');
 
-let res = build.build('curl');
-if res != 0 || !sys.args.find('install') { sys.exit(res); }
-
-sys.exit(build.install(inc_dirs = 'include/*', lib_dirs = 'build/*'));
+sys.exit(build.perform('curl'));
