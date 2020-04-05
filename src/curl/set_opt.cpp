@@ -125,8 +125,13 @@ var_base_t * feral_curl_easy_set_opt_native( vm_state_t & vm, const fn_data_t & 
 				   vm.type_name( arg->type() ).c_str() );
 			return nullptr;
 		}
-		FILE * file = ( FILE * )arg->get_data();
-		// TODO: check if file is in write mode or not
+		FILE * file = ( FILE * )arg->get_data( 0 );
+		const std::string * mode = ( std::string * )arg->get_data( 1 );
+		if( mode->find( 'w' ) == std::string::npos && mode->find( 'a' ) == std::string::npos ) {
+			src->fail( fd.idx, "file is not writable, opened mode: %s",
+				   mode->c_str() );
+			return nullptr;
+		}
 		if( !file ) {
 			src->fail( fd.idx, "given file is not open",
 				   vm.type_name( arg->type() ).c_str() );
