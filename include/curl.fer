@@ -2,7 +2,6 @@
 mload('curl');
 
 let io = import('std/io');
-let lang = import('std/lang');
 
 let DEFAULT_PROGRESS_FUNC = fn(total_down, down, total_up, up) {
 	let frac_down = down / total_down;
