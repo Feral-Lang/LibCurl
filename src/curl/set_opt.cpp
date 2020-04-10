@@ -114,18 +114,12 @@ var_base_t * feral_curl_easy_set_opt_native( vm_state_t & vm, const fn_data_t & 
 		break;
 	}
 	case CURLOPT_WRITEDATA: {
-		int file_type = vm.dll_typeid( "var_file_t" );
-		if( !file_type ) {
-			src->fail( fd.idx, "seems like the file module hasn't been loaded - it must be loaded first for curl to work",
-				   vm.type_name( arg->type() ).c_str() );
-			return nullptr;
-		}
-		if( arg->type() != file_type ) {
+		if( arg->type() != VT_FILE ) {
 			src->fail( fd.idx, "expected a file as parameter for this option, found: %s",
 				   vm.type_name( arg->type() ).c_str() );
 			return nullptr;
 		}
-		FILE * file = ( FILE * )arg->get_data( 0 );
+		FILE * file = FILE( arg )->get();
 		const std::string * mode = ( std::string * )arg->get_data( 1 );
 		if( mode->find( 'w' ) == std::string::npos && mode->find( 'a' ) == std::string::npos ) {
 			src->fail( fd.idx, "file is not writable, opened mode: %s",
