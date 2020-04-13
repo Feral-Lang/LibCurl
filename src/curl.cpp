@@ -84,18 +84,17 @@ var_base_t * feral_curl_easy_str_err_from_int( vm_state_t & vm, const fn_data_t 
 INIT_MODULE( curl )
 {
 	var_src_t * src = vm.src_stack.back();
-	const std::string & src_name = src->src()->path();
 
 	src->add_nativefn( "new_easy", feral_curl_easy_init );
-	src->add_nativefn( "set_opt_native", feral_curl_easy_set_opt_native, { "", "", "" } );
-	src->add_nativefn( "strerr", feral_curl_easy_str_err_from_int, { "" } );
-	src->add_nativefn( "set_default_progress_func_native", feral_curl_set_default_progress_func, { "" } );
-	src->add_nativefn( "set_default_progress_func_tick_native", feral_curl_set_default_progress_func_tick, { "" } );
+	src->add_nativefn( "set_opt_native", feral_curl_easy_set_opt_native, 3 );
+	src->add_nativefn( "strerr", feral_curl_easy_str_err_from_int, 1 );
+	src->add_nativefn( "set_default_progress_func_native", feral_curl_set_default_progress_func, 1 );
+	src->add_nativefn( "set_default_progress_func_tick_native", feral_curl_set_default_progress_func_tick, 1 );
 
 	// get the type id for curl type (register_type)
 	curl_typeid = vm.register_new_type( "curl_t", src_id, idx );
 
-	vm.add_typefn( curl_typeid, "perform", new var_fn_t( src_name, {}, {}, { .native = feral_curl_easy_perform }, 0, 0 ), false );
+	vm.add_typefn_native( curl_typeid, "perform", feral_curl_easy_perform, 0, src_id, idx );
 
 	// all the enum values
 
