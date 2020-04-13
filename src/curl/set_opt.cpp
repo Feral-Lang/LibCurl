@@ -92,7 +92,6 @@ var_base_t * feral_curl_easy_set_opt_native( vm_state_t & vm, const fn_data_t & 
 	case CURLOPT_XFERINFOFUNCTION: {
 		callback = & progress_callback;
 		callback_arg_count = 4;
-	callback_update:
 		if( arg->type() == VT_NIL ) {
 			if( * callback ) var_dref( * callback );
 			* callback = nullptr;
