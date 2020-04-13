@@ -93,7 +93,7 @@ INIT_MODULE( curl )
 	src->add_nativefn( "set_default_progress_func_tick_native", feral_curl_set_default_progress_func_tick, { "" } );
 
 	// get the type id for curl type (register_type)
-	curl_typeid = vm.register_new_type( "var_curl_t", "curl_t", src_id, idx );
+	curl_typeid = vm.register_new_type( "curl_t", src_id, idx );
 
 	vm.add_typefn( curl_typeid, "perform", new var_fn_t( src_name, {}, {}, { .native = feral_curl_easy_perform }, 0, 0 ), false );
 
