@@ -107,7 +107,11 @@ INIT_MODULE( curl )
 	src->add_nativevar( "E_COULDNT_RESOLVE_PROXY", make_all< var_int_t >( CURLE_COULDNT_RESOLVE_PROXY, src_id, idx ) );
 	src->add_nativevar( "E_COULDNT_RESOLVE_HOST", make_all< var_int_t >( CURLE_COULDNT_RESOLVE_HOST, src_id, idx ) );
 	src->add_nativevar( "E_COULDNT_CONNECT", make_all< var_int_t >( CURLE_COULDNT_CONNECT, src_id, idx ) );
+#if CURL_AT_LEAST_VERSION( 7, 51, 0 )
 	src->add_nativevar( "E_WEIRD_SERVER_REPLY", make_all< var_int_t >( CURLE_WEIRD_SERVER_REPLY, src_id, idx ) );
+#else
+	src->add_nativevar( "E_FTP_WEIRD_SERVER_REPLY", make_all< var_int_t >( CURLE_FTP_WEIRD_SERVER_REPLY, src_id, idx ) );
+#endif
 	src->add_nativevar( "E_REMOTE_ACCESS_DENIED", make_all< var_int_t >( CURLE_REMOTE_ACCESS_DENIED, src_id, idx ) );
 	src->add_nativevar( "E_FTP_ACCEPT_FAILED", make_all< var_int_t >( CURLE_FTP_ACCEPT_FAILED, src_id, idx ) );
 	src->add_nativevar( "E_FTP_WEIRD_PASS_REPLY", make_all< var_int_t >( CURLE_FTP_WEIRD_PASS_REPLY, src_id, idx ) );
@@ -150,7 +154,7 @@ INIT_MODULE( curl )
 	src->add_nativevar( "E_UNKNOWN_OPTION", make_all< var_int_t >( CURLE_UNKNOWN_OPTION, src_id, idx ) );
 	src->add_nativevar( "E_TELNET_OPTION_SYNTAX", make_all< var_int_t >( CURLE_TELNET_OPTION_SYNTAX, src_id, idx ) );
 	src->add_nativevar( "E_OBSOLETE50", make_all< var_int_t >( CURLE_OBSOLETE50, src_id, idx ) );
-#if CURL_AT_LEAST_VERSION(7, 62, 0)
+#if CURL_AT_LEAST_VERSION( 7, 62, 0 )
 	src->add_nativevar( "E_OBSOLETE51", make_all< var_int_t >( CURLE_OBSOLETE51, src_id, idx ) );
 #endif
 	src->add_nativevar( "E_GOT_NOTHING", make_all< var_int_t >( CURLE_GOT_NOTHING, src_id, idx ) );
@@ -193,13 +197,21 @@ INIT_MODULE( curl )
 	src->add_nativevar( "E_NO_CONNECTION_AVAILABLE", make_all< var_int_t >( CURLE_NO_CONNECTION_AVAILABLE, src_id, idx ) );
 	src->add_nativevar( "E_SSL_PINNEDPUBKEYNOTMATCH", make_all< var_int_t >( CURLE_SSL_PINNEDPUBKEYNOTMATCH, src_id, idx ) );
 	src->add_nativevar( "E_SSL_INVALIDCERTSTATUS", make_all< var_int_t >( CURLE_SSL_INVALIDCERTSTATUS, src_id, idx ) );
+#if CURL_AT_LEAST_VERSION( 7, 50, 2 )
 	src->add_nativevar( "E_HTTP2_STREAM", make_all< var_int_t >( CURLE_HTTP2_STREAM, src_id, idx ) );
+#endif
+#if CURL_AT_LEAST_VERSION( 7, 59, 0 )
 	src->add_nativevar( "E_RECURSIVE_API_CALL", make_all< var_int_t >( CURLE_RECURSIVE_API_CALL, src_id, idx ) );
-/* TODO: Seem to be in different version than available
+#endif
+#if CURL_AT_LEAST_VERSION( 7, 66, 0 )
 	src->add_nativevar( "E_AUTH_ERROR", make_all< var_int_t >( CURLE_AUTH_ERROR, src_id, idx ) );
+#endif
+#if CURL_AT_LEAST_VERSION( 7, 68, 0 )
 	src->add_nativevar( "E_HTTP3", make_all< var_int_t >( CURLE_HTTP3, src_id, idx ) );
+#endif
+#if CURL_AT_LEAST_VERSION( 7, 69, 0 )
 	src->add_nativevar( "E_QUIC_CONNECT_ERROR", make_all< var_int_t >( CURLE_QUIC_CONNECT_ERROR, src_id, idx ) );
-*/
+#endif
 
 	// CURLMcode
 	src->add_nativevar( "M_CALL_MULTI_PERFORM", make_all< var_int_t >( CURLM_CALL_MULTI_PERFORM, src_id, idx ) );
@@ -211,11 +223,15 @@ INIT_MODULE( curl )
 	src->add_nativevar( "M_BAD_SOCKET", make_all< var_int_t >( CURLM_BAD_SOCKET, src_id, idx ) );
 	src->add_nativevar( "M_UNKNOWN_OPTION", make_all< var_int_t >( CURLM_UNKNOWN_OPTION, src_id, idx ) );
 	src->add_nativevar( "M_ADDED_ALREADY", make_all< var_int_t >( CURLM_ADDED_ALREADY, src_id, idx ) );
+#if CURL_AT_LEAST_VERSION( 7, 59, 0 )
 	src->add_nativevar( "M_RECURSIVE_API_CALL", make_all< var_int_t >( CURLM_RECURSIVE_API_CALL, src_id, idx ) );
-/* TODO: Seem to be in different version than available
+#endif
+#if CURL_AT_LEAST_VERSION( 7, 68, 0 )
 	src->add_nativevar( "WAKEUP_FAILURE", make_all< var_int_t >( CURLM_WAKEUP_FAILURE, src_id, idx ) );
+#endif
+#if CURL_AT_LEAST_VERSION( 7, 69, 0 )
 	src->add_nativevar( "BAD_FUNCTION_ARGUMENT", make_all< var_int_t >( CURLM_BAD_FUNCTION_ARGUMENT, src_id, idx ) );
-*/
+#endif
 
 	// CURLSHcode
 	src->add_nativevar( "SHE_OK", make_all< var_int_t >( CURLSHE_OK, src_id, idx ) );
@@ -225,7 +241,7 @@ INIT_MODULE( curl )
 	src->add_nativevar( "SHE_NOMEM", make_all< var_int_t >( CURLSHE_NOMEM, src_id, idx ) );
 	src->add_nativevar( "SHE_NOT_BUILT_IN", make_all< var_int_t >( CURLSHE_NOT_BUILT_IN, src_id, idx ) );
 
-#if CURL_AT_LEAST_VERSION(7, 62, 0)
+#if CURL_AT_LEAST_VERSION( 7, 62, 0 )
 	// CURLUcode
 	src->add_nativevar( "UE_OK", make_all< var_int_t >( CURLUE_OK, src_id, idx ) );
 	src->add_nativevar( "UE_BAD_HANDLE", make_all< var_int_t >( CURLUE_BAD_HANDLE, src_id, idx ) );
@@ -291,15 +307,21 @@ INIT_MODULE( curl )
 	src->add_nativevar( "OPT_CHUNK_DATA", make_all< var_int_t >( CURLOPT_CHUNK_DATA, src_id, idx ) );
 	src->add_nativevar( "OPT_FNMATCH_FUNCTION", make_all< var_int_t >( CURLOPT_FNMATCH_FUNCTION, src_id, idx ) );
 	src->add_nativevar( "OPT_FNMATCH_DATA", make_all< var_int_t >( CURLOPT_FNMATCH_DATA, src_id, idx ) );
+#if CURL_AT_LEAST_VERSION( 7, 54, 0 )
 	src->add_nativevar( "OPT_SUPPRESS_CONNECT_HEADERS", make_all< var_int_t >( CURLOPT_SUPPRESS_CONNECT_HEADERS, src_id, idx ) );
+#endif
+#if CURL_AT_LEAST_VERSION( 7, 59, 0 )
 	src->add_nativevar( "OPT_RESOLVER_START_FUNCTION", make_all< var_int_t >( CURLOPT_RESOLVER_START_FUNCTION, src_id, idx ) );
 	src->add_nativevar( "OPT_RESOLVER_START_DATA", make_all< var_int_t >( CURLOPT_RESOLVER_START_DATA, src_id, idx ) );
+#endif
 
 	// ERROR OPTIONS
 	src->add_nativevar( "OPT_ERRORBUFFER", make_all< var_int_t >( CURLOPT_ERRORBUFFER, src_id, idx ) );
 	src->add_nativevar( "OPT_STDERR", make_all< var_int_t >( CURLOPT_STDERR, src_id, idx ) );
 	src->add_nativevar( "OPT_FAILONERROR", make_all< var_int_t >( CURLOPT_FAILONERROR, src_id, idx ) );
+#if CURL_AT_LEAST_VERSION( 7, 51, 0 )
 	src->add_nativevar( "OPT_KEEP_SENDING_ON_ERROR", make_all< var_int_t >( CURLOPT_KEEP_SENDING_ON_ERROR, src_id, idx ) );
+#endif
 
 	// NETWORK OPTIONS
 	src->add_nativevar( "OPT_URL", make_all< var_int_t >( CURLOPT_URL, src_id, idx ) );
@@ -308,34 +330,48 @@ INIT_MODULE( curl )
 	src->add_nativevar( "OPT_REDIR_PROTOCOLS", make_all< var_int_t >( CURLOPT_REDIR_PROTOCOLS, src_id, idx ) );
 	src->add_nativevar( "OPT_DEFAULT_PROTOCOL", make_all< var_int_t >( CURLOPT_DEFAULT_PROTOCOL, src_id, idx ) );
 	src->add_nativevar( "OPT_PROXY", make_all< var_int_t >( CURLOPT_PROXY, src_id, idx ) );
+#if CURL_AT_LEAST_VERSION( 7, 52, 0 )
 	src->add_nativevar( "OPT_PRE_PROXY", make_all< var_int_t >( CURLOPT_PRE_PROXY, src_id, idx ) );
+#endif
 	src->add_nativevar( "OPT_PROXYPORT", make_all< var_int_t >( CURLOPT_PROXYPORT, src_id, idx ) );
 	src->add_nativevar( "OPT_PROXYTYPE", make_all< var_int_t >( CURLOPT_PROXYTYPE, src_id, idx ) );
 	src->add_nativevar( "OPT_NOPROXY", make_all< var_int_t >( CURLOPT_NOPROXY, src_id, idx ) );
 	src->add_nativevar( "OPT_HTTPPROXYTUNNEL", make_all< var_int_t >( CURLOPT_HTTPPROXYTUNNEL, src_id, idx ) );
+#if CURL_AT_LEAST_VERSION( 7, 49, 0 )
 	src->add_nativevar( "OPT_CONNECT_TO", make_all< var_int_t >( CURLOPT_CONNECT_TO, src_id, idx ) );
+#endif
+#if CURL_AT_LEAST_VERSION( 7, 55, 0 )
 	src->add_nativevar( "OPT_SOCKS5_AUTH", make_all< var_int_t >( CURLOPT_SOCKS5_AUTH, src_id, idx ) );
+#endif
 	src->add_nativevar( "OPT_SOCKS5_GSSAPI_SERVICE", make_all< var_int_t >( CURLOPT_SOCKS5_GSSAPI_SERVICE, src_id, idx ) );
 	src->add_nativevar( "OPT_SOCKS5_GSSAPI_NEC", make_all< var_int_t >( CURLOPT_SOCKS5_GSSAPI_NEC, src_id, idx ) );
 	src->add_nativevar( "OPT_PROXY_SERVICE_NAME", make_all< var_int_t >( CURLOPT_PROXY_SERVICE_NAME, src_id, idx ) );
+#if CURL_AT_LEAST_VERSION( 7, 60, 0 )
 	src->add_nativevar( "OPT_HAPROXYPROTOCOL", make_all< var_int_t >( CURLOPT_HAPROXYPROTOCOL, src_id, idx ) );
+#endif
 	src->add_nativevar( "OPT_SERVICE_NAME", make_all< var_int_t >( CURLOPT_SERVICE_NAME, src_id, idx ) );
 	src->add_nativevar( "OPT_INTERFACE", make_all< var_int_t >( CURLOPT_INTERFACE, src_id, idx ) );
 	src->add_nativevar( "OPT_LOCALPORT", make_all< var_int_t >( CURLOPT_LOCALPORT, src_id, idx ) );
 	src->add_nativevar( "OPT_LOCALPORTRANGE", make_all< var_int_t >( CURLOPT_LOCALPORTRANGE, src_id, idx ) );
 	src->add_nativevar( "OPT_DNS_CACHE_TIMEOUT", make_all< var_int_t >( CURLOPT_DNS_CACHE_TIMEOUT, src_id, idx ) );
 	src->add_nativevar( "OPT_DNS_USE_GLOBAL_CACHE", make_all< var_int_t >( CURLOPT_DNS_USE_GLOBAL_CACHE, src_id, idx ) );
+#if CURL_AT_LEAST_VERSION( 7, 62, 0 )
 	src->add_nativevar( "OPT_DOH_URL", make_all< var_int_t >( CURLOPT_DOH_URL, src_id, idx ) );
+#endif
 	src->add_nativevar( "OPT_BUFFERSIZE", make_all< var_int_t >( CURLOPT_BUFFERSIZE, src_id, idx ) );
 	src->add_nativevar( "OPT_PORT", make_all< var_int_t >( CURLOPT_PORT, src_id, idx ) );
+#if CURL_AT_LEAST_VERSION( 7, 49, 0 )
 	src->add_nativevar( "OPT_TCP_FASTOPEN", make_all< var_int_t >( CURLOPT_TCP_FASTOPEN, src_id, idx ) );
+#endif
 	src->add_nativevar( "OPT_TCP_NODELAY", make_all< var_int_t >( CURLOPT_TCP_NODELAY, src_id, idx ) );
 	src->add_nativevar( "OPT_ADDRESS_SCOPE", make_all< var_int_t >( CURLOPT_ADDRESS_SCOPE, src_id, idx ) );
 	src->add_nativevar( "OPT_TCP_KEEPALIVE", make_all< var_int_t >( CURLOPT_TCP_KEEPALIVE, src_id, idx ) );
 	src->add_nativevar( "OPT_TCP_KEEPIDLE", make_all< var_int_t >( CURLOPT_TCP_KEEPIDLE, src_id, idx ) );
 	src->add_nativevar( "OPT_TCP_KEEPINTVL", make_all< var_int_t >( CURLOPT_TCP_KEEPINTVL, src_id, idx ) );
 	src->add_nativevar( "OPT_UNIX_SOCKET_PATH", make_all< var_int_t >( CURLOPT_UNIX_SOCKET_PATH, src_id, idx ) );
+#if CURL_AT_LEAST_VERSION( 7, 53, 0 )
 	src->add_nativevar( "OPT_ABSTRACT_UNIX_SOCKET", make_all< var_int_t >( CURLOPT_ABSTRACT_UNIX_SOCKET, src_id, idx ) );
+#endif
 
 	// NAMES and PASSWORDS OPTIONS (Authentication)
 	src->add_nativevar( "OPT_NETRC", make_all< var_int_t >( CURLOPT_NETRC, src_id, idx ) );
@@ -349,18 +385,22 @@ INIT_MODULE( curl )
 	src->add_nativevar( "OPT_PROXYPASSWORD", make_all< var_int_t >( CURLOPT_PROXYPASSWORD, src_id, idx ) );
 	src->add_nativevar( "OPT_HTTPAUTH", make_all< var_int_t >( CURLOPT_HTTPAUTH, src_id, idx ) );
 	src->add_nativevar( "OPT_TLSAUTH_USERNAME", make_all< var_int_t >( CURLOPT_TLSAUTH_USERNAME, src_id, idx ) );
-	src->add_nativevar( "OPT_PROXY_TLSAUTH_USERNAME", make_all< var_int_t >( CURLOPT_PROXY_TLSAUTH_USERNAME, src_id, idx ) );
 	src->add_nativevar( "OPT_TLSAUTH_PASSWORD", make_all< var_int_t >( CURLOPT_TLSAUTH_PASSWORD, src_id, idx ) );
-	src->add_nativevar( "OPT_PROXY_TLSAUTH_PASSWORD", make_all< var_int_t >( CURLOPT_PROXY_TLSAUTH_PASSWORD, src_id, idx ) );
 	src->add_nativevar( "OPT_TLSAUTH_TYPE", make_all< var_int_t >( CURLOPT_TLSAUTH_TYPE, src_id, idx ) );
+#if CURL_AT_LEAST_VERSION( 7, 52, 0 )
+	src->add_nativevar( "OPT_PROXY_TLSAUTH_USERNAME", make_all< var_int_t >( CURLOPT_PROXY_TLSAUTH_USERNAME, src_id, idx ) );
+	src->add_nativevar( "OPT_PROXY_TLSAUTH_PASSWORD", make_all< var_int_t >( CURLOPT_PROXY_TLSAUTH_PASSWORD, src_id, idx ) );
 	src->add_nativevar( "OPT_PROXY_TLSAUTH_TYPE", make_all< var_int_t >( CURLOPT_PROXY_TLSAUTH_TYPE, src_id, idx ) );
+#endif
 	src->add_nativevar( "OPT_PROXYAUTH", make_all< var_int_t >( CURLOPT_PROXYAUTH, src_id, idx ) );
-/* TODO: not available
+#if CURL_AT_LEAST_VERSION( 7, 66, 0 )
 	src->add_nativevar( "OPT_SASL_AUTHZID", make_all< var_int_t >( CURLOPT_SASL_AUTHZID, src_id, idx ) );
-*/
+#endif
+#if CURL_AT_LEAST_VERSION( 7, 61, 0 )
 	src->add_nativevar( "OPT_SASL_IR", make_all< var_int_t >( CURLOPT_SASL_IR, src_id, idx ) );
-	src->add_nativevar( "OPT_XOAUTH2_BEARER", make_all< var_int_t >( CURLOPT_XOAUTH2_BEARER, src_id, idx ) );
 	src->add_nativevar( "OPT_DISALLOW_USERNAME_IN_URL", make_all< var_int_t >( CURLOPT_DISALLOW_USERNAME_IN_URL, src_id, idx ) );
+#endif
+	src->add_nativevar( "OPT_XOAUTH2_BEARER", make_all< var_int_t >( CURLOPT_XOAUTH2_BEARER, src_id, idx ) );
 
 	// HTTP OPTIONS
 	src->add_nativevar( "OPT_AUTOREFERER", make_all< var_int_t >( CURLOPT_AUTOREFERER, src_id, idx ) );
@@ -388,18 +428,24 @@ INIT_MODULE( curl )
 	src->add_nativevar( "OPT_COOKIEJAR", make_all< var_int_t >( CURLOPT_COOKIEJAR, src_id, idx ) );
 	src->add_nativevar( "OPT_COOKIESESSION", make_all< var_int_t >( CURLOPT_COOKIESESSION, src_id, idx ) );
 	src->add_nativevar( "OPT_COOKIELIST", make_all< var_int_t >( CURLOPT_COOKIELIST, src_id, idx ) );
+#if CURL_AT_LEAST_VERSION( 7, 64, 1 )
 	src->add_nativevar( "OPT_ALTSVC", make_all< var_int_t >( CURLOPT_ALTSVC, src_id, idx ) );
 	src->add_nativevar( "OPT_ALTSVC_CTRL", make_all< var_int_t >( CURLOPT_ALTSVC_CTRL, src_id, idx ) );
+#endif
 	src->add_nativevar( "OPT_HTTPGET", make_all< var_int_t >( CURLOPT_HTTPGET, src_id, idx ) );
+#if CURL_AT_LEAST_VERSION( 7, 55, 0 )
 	src->add_nativevar( "OPT_REQUEST_TARGET", make_all< var_int_t >( CURLOPT_REQUEST_TARGET, src_id, idx ) );
+#endif
 	src->add_nativevar( "OPT_HTTP_VERSION", make_all< var_int_t >( CURLOPT_HTTP_VERSION, src_id, idx ) );
+#if CURL_AT_LEAST_VERSION( 7, 64, 0 )
 	src->add_nativevar( "OPT_HTTP09_ALLOWED", make_all< var_int_t >( CURLOPT_HTTP09_ALLOWED, src_id, idx ) );
+	src->add_nativevar( "OPT_TRAILERFUNCTION", make_all< var_int_t >( CURLOPT_TRAILERFUNCTION, src_id, idx ) );
+	src->add_nativevar( "OPT_TRAILERDATA", make_all< var_int_t >( CURLOPT_TRAILERDATA, src_id, idx ) );
+#endif
 	src->add_nativevar( "OPT_IGNORE_CONTENT_LENGTH", make_all< var_int_t >( CURLOPT_IGNORE_CONTENT_LENGTH, src_id, idx ) );
 	src->add_nativevar( "OPT_HTTP_CONTENT_DECODING", make_all< var_int_t >( CURLOPT_HTTP_CONTENT_DECODING, src_id, idx ) );
 	src->add_nativevar( "OPT_HTTP_TRANSFER_DECODING", make_all< var_int_t >( CURLOPT_HTTP_TRANSFER_DECODING, src_id, idx ) );
 	src->add_nativevar( "OPT_EXPECT_100_TIMEOUT_MS", make_all< var_int_t >( CURLOPT_EXPECT_100_TIMEOUT_MS, src_id, idx ) );
-	src->add_nativevar( "OPT_TRAILERFUNCTION", make_all< var_int_t >( CURLOPT_TRAILERFUNCTION, src_id, idx ) );
-	src->add_nativevar( "OPT_TRAILERDATA", make_all< var_int_t >( CURLOPT_TRAILERDATA, src_id, idx ) );
 	src->add_nativevar( "OPT_PIPEWAIT", make_all< var_int_t >( CURLOPT_PIPEWAIT, src_id, idx ) );
 	src->add_nativevar( "OPT_STREAM_DEPENDS", make_all< var_int_t >( CURLOPT_STREAM_DEPENDS, src_id, idx ) );
 	src->add_nativevar( "OPT_STREAM_DEPENDS_E", make_all< var_int_t >( CURLOPT_STREAM_DEPENDS_E, src_id, idx ) );
@@ -409,13 +455,15 @@ INIT_MODULE( curl )
 	src->add_nativevar( "OPT_MAIL_FROM", make_all< var_int_t >( CURLOPT_MAIL_FROM, src_id, idx ) );
 	src->add_nativevar( "OPT_MAIL_RCPT", make_all< var_int_t >( CURLOPT_MAIL_RCPT, src_id, idx ) );
 	src->add_nativevar( "OPT_MAIL_AUTH", make_all< var_int_t >( CURLOPT_MAIL_AUTH, src_id, idx ) );
-/* TODO: not available
+#if CURL_AT_LEAST_VERSION( 7, 69, 0 )
 	src->add_nativevar( "OPT_MAIL_RCPT_ALLLOWFAILS", make_all< var_int_t >( CURLOPT_MAIL_RCPT_ALLLOWFAILS, src_id, idx ) );
-*/
+#endif
 
 	// TFTP OPTIONS
 	src->add_nativevar( "OPT_TFTP_BLKSIZE", make_all< var_int_t >( CURLOPT_TFTP_BLKSIZE, src_id, idx ) );
+#if CURL_AT_LEAST_VERSION( 7, 48, 0 )
 	src->add_nativevar( "OPT_TFTP_NO_OPTIONS", make_all< var_int_t >( CURLOPT_TFTP_NO_OPTIONS, src_id, idx ) );
+#endif
 
 	// FTP OPTIONS
 	src->add_nativevar( "OPT_FTPPORT", make_all< var_int_t >( CURLOPT_FTPPORT, src_id, idx ) );
@@ -450,7 +498,7 @@ INIT_MODULE( curl )
 	src->add_nativevar( "OPT_RANGE", make_all< var_int_t >( CURLOPT_RANGE, src_id, idx ) );
 	src->add_nativevar( "OPT_RESUME_FROM", make_all< var_int_t >( CURLOPT_RESUME_FROM, src_id, idx ) );
 	src->add_nativevar( "OPT_RESUME_FROM_LARGE", make_all< var_int_t >( CURLOPT_RESUME_FROM_LARGE, src_id, idx ) );
-#if CURL_AT_LEAST_VERSION(7, 63, 0)
+#if CURL_AT_LEAST_VERSION( 7, 63, 0 )
 	src->add_nativevar( "OPT_CURLU", make_all< var_int_t >( CURLOPT_CURLU, src_id, idx ) );
 #endif
 	src->add_nativevar( "OPT_CUSTOMREQUEST", make_all< var_int_t >( CURLOPT_CUSTOMREQUEST, src_id, idx ) );
@@ -460,13 +508,19 @@ INIT_MODULE( curl )
 	src->add_nativevar( "OPT_INFILESIZE", make_all< var_int_t >( CURLOPT_INFILESIZE, src_id, idx ) );
 	src->add_nativevar( "OPT_INFILESIZE_LARGE", make_all< var_int_t >( CURLOPT_INFILESIZE_LARGE, src_id, idx ) );
 	src->add_nativevar( "OPT_UPLOAD", make_all< var_int_t >( CURLOPT_UPLOAD, src_id, idx ) );
+#if CURL_AT_LEAST_VERSION( 7, 62, 0 )
 	src->add_nativevar( "OPT_UPLOAD_BUFFERSIZE", make_all< var_int_t >( CURLOPT_UPLOAD_BUFFERSIZE, src_id, idx ) );
+#endif
+#if CURL_AT_LEAST_VERSION( 7, 56, 0 )
 	src->add_nativevar( "OPT_MIMEPOST", make_all< var_int_t >( CURLOPT_MIMEPOST, src_id, idx ) );
+#endif
 	src->add_nativevar( "OPT_MAXFILESIZE", make_all< var_int_t >( CURLOPT_MAXFILESIZE, src_id, idx ) );
 	src->add_nativevar( "OPT_MAXFILESIZE_LARGE", make_all< var_int_t >( CURLOPT_MAXFILESIZE_LARGE, src_id, idx ) );
 	src->add_nativevar( "OPT_TIMECONDITION", make_all< var_int_t >( CURLOPT_TIMECONDITION, src_id, idx ) );
 	src->add_nativevar( "OPT_TIMEVALUE", make_all< var_int_t >( CURLOPT_TIMEVALUE, src_id, idx ) );
+#if CURL_AT_LEAST_VERSION( 7, 59, 0 )
 	src->add_nativevar( "OPT_TIMEVALUE_LARGE", make_all< var_int_t >( CURLOPT_TIMEVALUE_LARGE, src_id, idx ) );
+#endif
 
 	// CONNECTION OPTIONS
 	src->add_nativevar( "OPT_TIMEOUT", make_all< var_int_t >( CURLOPT_TIMEOUT, src_id, idx ) );
@@ -478,9 +532,9 @@ INIT_MODULE( curl )
 	src->add_nativevar( "OPT_MAXCONNECTS", make_all< var_int_t >( CURLOPT_MAXCONNECTS, src_id, idx ) );
 	src->add_nativevar( "OPT_FRESH_CONNECT", make_all< var_int_t >( CURLOPT_FRESH_CONNECT, src_id, idx ) );
 	src->add_nativevar( "OPT_FORBID_REUSE", make_all< var_int_t >( CURLOPT_FORBID_REUSE, src_id, idx ) );
-/* TODO: not available
+#if CURL_AT_LEAST_VERSION( 7, 65, 0 )
 	src->add_nativevar( "OPT_MAXAGE_CONN", make_all< var_int_t >( CURLOPT_MAXAGE_CONN, src_id, idx ) );
-*/
+#endif
 	src->add_nativevar( "OPT_CONNECTTIMEOUT", make_all< var_int_t >( CURLOPT_CONNECTTIMEOUT, src_id, idx ) );
 	src->add_nativevar( "OPT_CONNECTTIMEOUT_MS", make_all< var_int_t >( CURLOPT_CONNECTTIMEOUT_MS, src_id, idx ) );
 	src->add_nativevar( "OPT_IPRESOLVE", make_all< var_int_t >( CURLOPT_IPRESOLVE, src_id, idx ) );
@@ -491,59 +545,71 @@ INIT_MODULE( curl )
 	src->add_nativevar( "OPT_DNS_LOCAL_IP4", make_all< var_int_t >( CURLOPT_DNS_LOCAL_IP4, src_id, idx ) );
 	src->add_nativevar( "OPT_DNS_LOCAL_IP6", make_all< var_int_t >( CURLOPT_DNS_LOCAL_IP6, src_id, idx ) );
 	src->add_nativevar( "OPT_DNS_SERVERS", make_all< var_int_t >( CURLOPT_DNS_SERVERS, src_id, idx ) );
+#if CURL_AT_LEAST_VERSION( 7, 60, 0 )
 	src->add_nativevar( "OPT_DNS_SHUFFLE_ADDRESSES", make_all< var_int_t >( CURLOPT_DNS_SHUFFLE_ADDRESSES, src_id, idx ) );
+#endif
 	src->add_nativevar( "OPT_ACCEPTTIMEOUT_MS", make_all< var_int_t >( CURLOPT_ACCEPTTIMEOUT_MS, src_id, idx ) );
+#if CURL_AT_LEAST_VERSION( 7, 59, 0 )
 	src->add_nativevar( "OPT_HAPPY_EYEBALLS_TIMEOUT_MS", make_all< var_int_t >( CURLOPT_HAPPY_EYEBALLS_TIMEOUT_MS, src_id, idx ) );
+#endif
+#if CURL_AT_LEAST_VERSION( 7, 62, 0 )
 	src->add_nativevar( "OPT_UPKEEP_INTERVAL_MS", make_all< var_int_t >( CURLOPT_UPKEEP_INTERVAL_MS, src_id, idx ) );
+#endif
 
 	// SSL and SECURITY OPTIONS
 	src->add_nativevar( "OPT_SSLCERT", make_all< var_int_t >( CURLOPT_SSLCERT, src_id, idx ) );
-	src->add_nativevar( "OPT_PROXY_SSLCERT", make_all< var_int_t >( CURLOPT_PROXY_SSLCERT, src_id, idx ) );
 	src->add_nativevar( "OPT_SSLCERTTYPE", make_all< var_int_t >( CURLOPT_SSLCERTTYPE, src_id, idx ) );
-	src->add_nativevar( "OPT_PROXY_SSLCERTTYPE", make_all< var_int_t >( CURLOPT_PROXY_SSLCERTTYPE, src_id, idx ) );
 	src->add_nativevar( "OPT_SSLKEY", make_all< var_int_t >( CURLOPT_SSLKEY, src_id, idx ) );
-	src->add_nativevar( "OPT_PROXY_SSLKEY", make_all< var_int_t >( CURLOPT_PROXY_SSLKEY, src_id, idx ) );
 	src->add_nativevar( "OPT_SSLKEYTYPE", make_all< var_int_t >( CURLOPT_SSLKEYTYPE, src_id, idx ) );
-	src->add_nativevar( "OPT_PROXY_SSLKEYTYPE", make_all< var_int_t >( CURLOPT_PROXY_SSLKEYTYPE, src_id, idx ) );
 	src->add_nativevar( "OPT_KEYPASSWD", make_all< var_int_t >( CURLOPT_KEYPASSWD, src_id, idx ) );
-	src->add_nativevar( "OPT_PROXY_KEYPASSWD", make_all< var_int_t >( CURLOPT_PROXY_KEYPASSWD, src_id, idx ) );
 	src->add_nativevar( "OPT_SSL_ENABLE_ALPN", make_all< var_int_t >( CURLOPT_SSL_ENABLE_ALPN, src_id, idx ) );
 	src->add_nativevar( "OPT_SSL_ENABLE_NPN", make_all< var_int_t >( CURLOPT_SSL_ENABLE_NPN, src_id, idx ) );
 	src->add_nativevar( "OPT_SSLENGINE", make_all< var_int_t >( CURLOPT_SSLENGINE, src_id, idx ) );
 	src->add_nativevar( "OPT_SSLENGINE_DEFAULT", make_all< var_int_t >( CURLOPT_SSLENGINE_DEFAULT, src_id, idx ) );
 	src->add_nativevar( "OPT_SSL_FALSESTART", make_all< var_int_t >( CURLOPT_SSL_FALSESTART, src_id, idx ) );
 	src->add_nativevar( "OPT_SSLVERSION", make_all< var_int_t >( CURLOPT_SSLVERSION, src_id, idx ) );
-	src->add_nativevar( "OPT_PROXY_SSLVERSION", make_all< var_int_t >( CURLOPT_PROXY_SSLVERSION, src_id, idx ) );
-	src->add_nativevar( "OPT_SSL_VERIFYHOST", make_all< var_int_t >( CURLOPT_SSL_VERIFYHOST, src_id, idx ) );
-	src->add_nativevar( "OPT_PROXY_SSL_VERIFYHOST", make_all< var_int_t >( CURLOPT_PROXY_SSL_VERIFYHOST, src_id, idx ) );
 	src->add_nativevar( "OPT_SSL_VERIFYPEER", make_all< var_int_t >( CURLOPT_SSL_VERIFYPEER, src_id, idx ) );
-	src->add_nativevar( "OPT_PROXY_SSL_VERIFYPEER", make_all< var_int_t >( CURLOPT_PROXY_SSL_VERIFYPEER, src_id, idx ) );
+	src->add_nativevar( "OPT_SSL_VERIFYHOST", make_all< var_int_t >( CURLOPT_SSL_VERIFYHOST, src_id, idx ) );
 	src->add_nativevar( "OPT_SSL_VERIFYSTATUS", make_all< var_int_t >( CURLOPT_SSL_VERIFYSTATUS, src_id, idx ) );
-	src->add_nativevar( "OPT_CAINFO", make_all< var_int_t >( CURLOPT_CAINFO, src_id, idx ) );
+#if CURL_AT_LEAST_VERSION( 7, 52, 0 )
 	src->add_nativevar( "OPT_PROXY_CAINFO", make_all< var_int_t >( CURLOPT_PROXY_CAINFO, src_id, idx ) );
+	src->add_nativevar( "OPT_PROXY_CAPATH", make_all< var_int_t >( CURLOPT_PROXY_CAPATH, src_id, idx ) );
+	src->add_nativevar( "OPT_PROXY_CRLFILE", make_all< var_int_t >( CURLOPT_PROXY_CRLFILE, src_id, idx ) );
+	src->add_nativevar( "OPT_PROXY_KEYPASSWD", make_all< var_int_t >( CURLOPT_PROXY_KEYPASSWD, src_id, idx ) );
+	src->add_nativevar( "OPT_PROXY_PINNEDPUBLICKEY", make_all< var_int_t >( CURLOPT_PROXY_PINNEDPUBLICKEY, src_id, idx ) );
+	src->add_nativevar( "OPT_PROXY_SSLCERT", make_all< var_int_t >( CURLOPT_PROXY_SSLCERT, src_id, idx ) );
+	src->add_nativevar( "OPT_PROXY_SSLCERTTYPE", make_all< var_int_t >( CURLOPT_PROXY_SSLCERTTYPE, src_id, idx ) );
+	src->add_nativevar( "OPT_PROXY_SSLKEY", make_all< var_int_t >( CURLOPT_PROXY_SSLKEY, src_id, idx ) );
+	src->add_nativevar( "OPT_PROXY_SSLKEYTYPE", make_all< var_int_t >( CURLOPT_PROXY_SSLKEYTYPE, src_id, idx ) );
+	src->add_nativevar( "OPT_PROXY_SSLVERSION", make_all< var_int_t >( CURLOPT_PROXY_SSLVERSION, src_id, idx ) );
+	src->add_nativevar( "OPT_PROXY_SSL_CIPHER_LIST", make_all< var_int_t >( CURLOPT_PROXY_SSL_CIPHER_LIST, src_id, idx ) );
+	src->add_nativevar( "OPT_PROXY_SSL_OPTIONS", make_all< var_int_t >( CURLOPT_PROXY_SSL_OPTIONS, src_id, idx ) );
+	src->add_nativevar( "OPT_PROXY_SSL_VERIFYHOST", make_all< var_int_t >( CURLOPT_PROXY_SSL_VERIFYHOST, src_id, idx ) );
+	src->add_nativevar( "OPT_PROXY_SSL_VERIFYPEER", make_all< var_int_t >( CURLOPT_PROXY_SSL_VERIFYPEER, src_id, idx ) );
+#endif
+	src->add_nativevar( "OPT_CAINFO", make_all< var_int_t >( CURLOPT_CAINFO, src_id, idx ) );
 	src->add_nativevar( "OPT_ISSUERCERT", make_all< var_int_t >( CURLOPT_ISSUERCERT, src_id, idx ) );
 	src->add_nativevar( "OPT_CAPATH", make_all< var_int_t >( CURLOPT_CAPATH, src_id, idx ) );
-	src->add_nativevar( "OPT_PROXY_CAPATH", make_all< var_int_t >( CURLOPT_PROXY_CAPATH, src_id, idx ) );
 	src->add_nativevar( "OPT_CRLFILE", make_all< var_int_t >( CURLOPT_CRLFILE, src_id, idx ) );
-	src->add_nativevar( "OPT_PROXY_CRLFILE", make_all< var_int_t >( CURLOPT_PROXY_CRLFILE, src_id, idx ) );
 	src->add_nativevar( "OPT_CERTINFO", make_all< var_int_t >( CURLOPT_CERTINFO, src_id, idx ) );
 	src->add_nativevar( "OPT_PINNEDPUBLICKEY", make_all< var_int_t >( CURLOPT_PINNEDPUBLICKEY, src_id, idx ) );
-	src->add_nativevar( "OPT_PROXY_PINNEDPUBLICKEY", make_all< var_int_t >( CURLOPT_PROXY_PINNEDPUBLICKEY, src_id, idx ) );
 	src->add_nativevar( "OPT_RANDOM_FILE", make_all< var_int_t >( CURLOPT_RANDOM_FILE, src_id, idx ) );
 	src->add_nativevar( "OPT_EGDSOCKET", make_all< var_int_t >( CURLOPT_EGDSOCKET, src_id, idx ) );
 	src->add_nativevar( "OPT_SSL_CIPHER_LIST", make_all< var_int_t >( CURLOPT_SSL_CIPHER_LIST, src_id, idx ) );
-	src->add_nativevar( "OPT_PROXY_SSL_CIPHER_LIST", make_all< var_int_t >( CURLOPT_PROXY_SSL_CIPHER_LIST, src_id, idx ) );
+#if CURL_AT_LEAST_VERSION( 7, 61, 0 )
 	src->add_nativevar( "OPT_TLS13_CIPHERS", make_all< var_int_t >( CURLOPT_TLS13_CIPHERS, src_id, idx ) );
 	src->add_nativevar( "OPT_PROXY_TLS13_CIPHERS", make_all< var_int_t >( CURLOPT_PROXY_TLS13_CIPHERS, src_id, idx ) );
+#endif
 	src->add_nativevar( "OPT_SSL_SESSIONID_CACHE", make_all< var_int_t >( CURLOPT_SSL_SESSIONID_CACHE, src_id, idx ) );
 	src->add_nativevar( "OPT_SSL_OPTIONS", make_all< var_int_t >( CURLOPT_SSL_OPTIONS, src_id, idx ) );
-	src->add_nativevar( "OPT_PROXY_SSL_OPTIONS", make_all< var_int_t >( CURLOPT_PROXY_SSL_OPTIONS, src_id, idx ) );
 	src->add_nativevar( "OPT_KRBLEVEL", make_all< var_int_t >( CURLOPT_KRBLEVEL, src_id, idx ) );
 	src->add_nativevar( "OPT_GSSAPI_DELEGATION", make_all< var_int_t >( CURLOPT_GSSAPI_DELEGATION, src_id, idx ) );
 
 	// SSH OPTIONS
 	src->add_nativevar( "OPT_SSH_AUTH_TYPES", make_all< var_int_t >( CURLOPT_SSH_AUTH_TYPES, src_id, idx ) );
+#if CURL_AT_LEAST_VERSION( 7, 56, 0 )
 	src->add_nativevar( "OPT_SSH_COMPRESSION", make_all< var_int_t >( CURLOPT_SSH_COMPRESSION, src_id, idx ) );
+#endif
 	src->add_nativevar( "OPT_SSH_HOST_PUBLIC_KEY_MD5", make_all< var_int_t >( CURLOPT_SSH_HOST_PUBLIC_KEY_MD5, src_id, idx ) );
 	src->add_nativevar( "OPT_SSH_PUBLIC_KEYFILE", make_all< var_int_t >( CURLOPT_SSH_PUBLIC_KEYFILE, src_id, idx ) );
 	src->add_nativevar( "OPT_SSH_PRIVATE_KEYFILE", make_all< var_int_t >( CURLOPT_SSH_PRIVATE_KEYFILE, src_id, idx ) );
