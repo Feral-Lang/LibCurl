@@ -150,7 +150,9 @@ INIT_MODULE( curl )
 	src->add_nativevar( "E_UNKNOWN_OPTION", make_all< var_int_t >( CURLE_UNKNOWN_OPTION, src_id, idx ) );
 	src->add_nativevar( "E_TELNET_OPTION_SYNTAX", make_all< var_int_t >( CURLE_TELNET_OPTION_SYNTAX, src_id, idx ) );
 	src->add_nativevar( "E_OBSOLETE50", make_all< var_int_t >( CURLE_OBSOLETE50, src_id, idx ) );
+#if CURL_AT_LEAST_VERSION(7, 62, 0)
 	src->add_nativevar( "E_OBSOLETE51", make_all< var_int_t >( CURLE_OBSOLETE51, src_id, idx ) );
+#endif
 	src->add_nativevar( "E_GOT_NOTHING", make_all< var_int_t >( CURLE_GOT_NOTHING, src_id, idx ) );
 	src->add_nativevar( "E_SSL_ENGINE_NOTFOUND", make_all< var_int_t >( CURLE_SSL_ENGINE_NOTFOUND, src_id, idx ) );
 	src->add_nativevar( "E_SSL_ENGINE_SETFAILED", make_all< var_int_t >( CURLE_SSL_ENGINE_SETFAILED, src_id, idx ) );
