@@ -6,7 +6,7 @@ let io = import('std/io');
 let DEFAULT_PROGRESS_FUNC = fn(total_down, down, total_up, up) {
 	let frac_down = down / total_down;
 	io.print((frac_down * 100).round(), '%\t\r');
-	io.flushout();
+	io.fflush(io.stdout);
 };
 
 let DEFAULT_PROGRESS_FUNC_TICK = 10;
