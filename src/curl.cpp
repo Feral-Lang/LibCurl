@@ -223,6 +223,7 @@ INIT_MODULE( curl )
 	src->add_nativevar( "SHE_NOMEM", make_all< var_int_t >( CURLSHE_NOMEM, src_id, idx ) );
 	src->add_nativevar( "SHE_NOT_BUILT_IN", make_all< var_int_t >( CURLSHE_NOT_BUILT_IN, src_id, idx ) );
 
+#if CURL_AT_LEAST_VERSION(7, 62, 0)
 	// CURLUcode
 	src->add_nativevar( "UE_OK", make_all< var_int_t >( CURLUE_OK, src_id, idx ) );
 	src->add_nativevar( "UE_BAD_HANDLE", make_all< var_int_t >( CURLUE_BAD_HANDLE, src_id, idx ) );
@@ -242,6 +243,7 @@ INIT_MODULE( curl )
 	src->add_nativevar( "UE_NO_PORT", make_all< var_int_t >( CURLUE_NO_PORT, src_id, idx ) );
 	src->add_nativevar( "UE_NO_QUERY", make_all< var_int_t >( CURLUE_NO_QUERY, src_id, idx ) );
 	src->add_nativevar( "UE_NO_FRAGMENT", make_all< var_int_t >( CURLUE_NO_FRAGMENT, src_id, idx ) );
+#endif
 
 	// EASY_OPTS
 
@@ -446,7 +448,9 @@ INIT_MODULE( curl )
 	src->add_nativevar( "OPT_RANGE", make_all< var_int_t >( CURLOPT_RANGE, src_id, idx ) );
 	src->add_nativevar( "OPT_RESUME_FROM", make_all< var_int_t >( CURLOPT_RESUME_FROM, src_id, idx ) );
 	src->add_nativevar( "OPT_RESUME_FROM_LARGE", make_all< var_int_t >( CURLOPT_RESUME_FROM_LARGE, src_id, idx ) );
+#if CURL_AT_LEAST_VERSION(7, 63, 0)
 	src->add_nativevar( "OPT_CURLU", make_all< var_int_t >( CURLOPT_CURLU, src_id, idx ) );
+#endif
 	src->add_nativevar( "OPT_CUSTOMREQUEST", make_all< var_int_t >( CURLOPT_CUSTOMREQUEST, src_id, idx ) );
 	src->add_nativevar( "OPT_FILETIME", make_all< var_int_t >( CURLOPT_FILETIME, src_id, idx ) );
 	src->add_nativevar( "OPT_DIRLISTONLY", make_all< var_int_t >( CURLOPT_DIRLISTONLY, src_id, idx ) );
