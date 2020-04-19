@@ -46,10 +46,9 @@ CURL * const var_curl_t::get() { return m_val; }
 
 var_base_t * feral_curl_easy_init( vm_state_t & vm, const fn_data_t & fd )
 {
-	srcfile_t * src = vm.current_source_file();
 	CURL * curl = curl_easy_init();
 	if( !curl ) {
-		src->fail( fd.idx, "failed to run curl_easy_init()" );
+		vm.fail( fd.idx, "failed to run curl_easy_init()" );
 		return nullptr;
 	}
 	curl_vm_data.vm = & vm;
@@ -62,7 +61,6 @@ var_base_t * feral_curl_easy_init( vm_state_t & vm, const fn_data_t & fd )
 var_base_t * feral_curl_easy_perform( vm_state_t & vm, const fn_data_t & fd )
 {
 	CURL * curl = CURL( fd.args[ 0 ] )->get();
-	srcfile_t * src_file = vm.current_source_file();
 
 	curl_vm_data.src_id = fd.src_id;
 	curl_vm_data.idx = fd.idx;
@@ -72,10 +70,9 @@ var_base_t * feral_curl_easy_perform( vm_state_t & vm, const fn_data_t & fd )
 
 var_base_t * feral_curl_easy_str_err_from_int( vm_state_t & vm, const fn_data_t & fd )
 {
-	srcfile_t * src_file = vm.current_source_file();
 	if( fd.args[ 1 ]->type() != VT_INT ) {
-		src_file->fail( fd.args[ 1 ]->idx(), "expected error code to be of type 'int', found: %s",
-				vm.type_name( fd.args[ 1 ]->type() ).c_str() );
+		vm.fail( fd.args[ 1 ]->idx(), "expected error code to be of type 'int', found: %s",
+			 vm.type_name( fd.args[ 1 ]->type() ).c_str() );
 		return nullptr;
 	}
 	return make< var_str_t >( curl_easy_strerror( ( CURLcode )INT( fd.args[ 1 ] )->get().get_si() ) );
