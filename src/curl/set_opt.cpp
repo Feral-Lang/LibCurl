@@ -59,7 +59,7 @@ int curl_progress_func( void * ptr, curl_off_t to_download, curl_off_t downloade
 
 var_base_t * feral_curl_easy_set_opt_native( vm_state_t & vm, const fn_data_t & fd )
 {
-	srcfile_t * src = vm.src_stack.back()->src();
+	srcfile_t * src = vm.current_source_file();
 	CURL * curl = CURL( fd.args[ 1 ] )->get();
 	int opt = INT( fd.args[ 2 ] )->get().get_si();
 	var_base_t * arg = fd.args[ 3 ];
@@ -143,7 +143,7 @@ var_base_t * feral_curl_easy_set_opt_native( vm_state_t & vm, const fn_data_t & 
 
 var_base_t * feral_curl_set_default_progress_func( vm_state_t & vm, const fn_data_t & fd )
 {
-	srcfile_t * src = vm.src_stack.back()->src();
+	srcfile_t * src = vm.current_source_file();
 	var_base_t * arg = fd.args[ 1 ];
 	if( arg->type() != VT_FUNC ) {
 		src->fail( fd.idx, "expected a function as parameter for setting default progress function, found: %s",
@@ -158,7 +158,7 @@ var_base_t * feral_curl_set_default_progress_func( vm_state_t & vm, const fn_dat
 
 var_base_t * feral_curl_set_default_progress_func_tick( vm_state_t & vm, const fn_data_t & fd )
 {
-	srcfile_t * src = vm.src_stack.back()->src();
+	srcfile_t * src = vm.current_source_file();
 	var_base_t * arg = fd.args[ 1 ];
 	if( arg->type() != VT_INT ) {
 		src->fail( fd.idx, "expected an integer as parameter for setting default progress function tick interval, found: %s",
