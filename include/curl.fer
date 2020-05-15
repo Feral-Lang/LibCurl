@@ -1,5 +1,5 @@
 # the enum values are available in c++ module file (INIT_MODULE function)
-mload('curl');
+mload('curl/curl');
 
 let io = import('std/io');
 

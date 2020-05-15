@@ -1,7 +1,7 @@
 let io = import('std/io');
 let fs = import('std/fs');
 let sys = import('std/sys');
-let curl = import('curl');
+let curl = import('curl/curl');
 
 let url = 'http://212.183.159.230/10MB.zip';
 let out = '10MB.zip';

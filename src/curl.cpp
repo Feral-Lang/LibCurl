@@ -7,38 +7,9 @@
 	before using or altering the project.
 */
 
-#include "curl.hpp"
+#include "../include/curl_base.hpp"
 
 static curl_vm_data_t curl_vm_data = { nullptr, 0, 0 };
-
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////// CURL class //////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-
-// initialize this in the init_curl function
-static int curl_typeid;
-
-var_curl_t::var_curl_t( CURL * const val, const size_t & src_id, const size_t & idx, const bool owner )
-	: var_base_t( curl_typeid, src_id, idx ), m_val( val ), m_owner( owner )
-{}
-var_curl_t::~var_curl_t()
-{
-	if( m_owner && m_val ) curl_easy_cleanup( m_val );
-}
-
-var_base_t * var_curl_t::copy( const size_t & src_id, const size_t & idx )
-{
-	return new var_curl_t( m_val, src_id, idx, false );
-}
-
-void var_curl_t::set( var_base_t * from )
-{
-	if( m_owner && m_val ) curl_easy_cleanup( m_val );
-	m_owner = false;
-	m_val = CURL( from )->get();
-}
-
-CURL * const var_curl_t::get() { return m_val; }
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////////////////////////// CURL functions ////////////////////////////////////////////////////////////
@@ -48,7 +19,7 @@ var_base_t * feral_curl_easy_init( vm_state_t & vm, const fn_data_t & fd )
 {
 	CURL * curl = curl_easy_init();
 	if( !curl ) {
-		vm.fail( fd.idx, "failed to run curl_easy_init()" );
+		vm.fail( fd.src_id, fd.idx, "failed to run curl_easy_init()" );
 		return nullptr;
 	}
 	curl_vm_data.vm = & vm;
@@ -70,9 +41,10 @@ var_base_t * feral_curl_easy_perform( vm_state_t & vm, const fn_data_t & fd )
 
 var_base_t * feral_curl_easy_str_err_from_int( vm_state_t & vm, const fn_data_t & fd )
 {
-	if( fd.args[ 1 ]->type() != VT_INT ) {
-		vm.fail( fd.args[ 1 ]->idx(), "expected error code to be of type 'int', found: %s",
-			 vm.type_name( fd.args[ 1 ]->type() ).c_str() );
+	if( !fd.args[ 1 ]->istype< var_int_t >() ) {
+		vm.fail( fd.args[ 1 ]->src_id(), fd.args[ 1 ]->idx(),
+			 "expected error code to be of type 'int', found: %s",
+			 vm.type_name( fd.args[ 1 ] ).c_str() );
 		return nullptr;
 	}
 	return make< var_str_t >( curl_easy_strerror( ( CURLcode )INT( fd.args[ 1 ] )->get().get_si() ) );
@@ -88,10 +60,10 @@ INIT_MODULE( curl )
 	src->add_native_fn( "set_default_progress_func_native", feral_curl_set_default_progress_func, 1 );
 	src->add_native_fn( "set_default_progress_func_tick_native", feral_curl_set_default_progress_func_tick, 1 );
 
-	// get the type id for curl type (register_type)
-	curl_typeid = vm.register_new_type( "curl_t", src_id, idx );
+	// register the curl type (register_type)
+	vm.register_type< var_curl_t >( "curl", src_id, idx );
 
-	vm.add_native_typefn( curl_typeid, "perform", feral_curl_easy_perform, 0, src_id, idx );
+	vm.add_native_typefn< var_curl_t >( "perform", feral_curl_easy_perform, 0, src_id, idx );
 
 	// all the enum values
 
