@@ -8,8 +8,6 @@ let builder = cmake.new('curl');
 let curl_dep = builder.add_dep('curl');
 curl_dep.make_reqd(); # it's compulsory
 
-let install_feral_curl_headers = builder.add_install('curl'); # install include/ to INSTALL_PREFIX/include/curl/
-
 let curl_type = builder.add_shared_lib('curl_type');
 curl_type.add_dep(curl_dep);
 
@@ -17,4 +15,4 @@ let curl_lib = builder.add_shared_lib('curl');
 curl_lib.add_dep(curl_dep).add_dep(curl_type);
 curl_lib.add_src('src/curl/set_opt.cpp');
 
-io.println(builder.gen());
+builder.gen();
