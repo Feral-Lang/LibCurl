@@ -1,10 +1,14 @@
 /*
-	Copyright (c) 2020, Electrux
-	All rights reserved.
-	Using the GNU GPL 3.0 license for the project,
-	main LICENSE file resides in project's root directory.
-	Please read that file and understand the license terms
-	before using or altering the project.
+	MIT License
+
+	Copyright (c) 2020 Feral Language repositories
+
+	Permission is hereby granted, free of charge, to any person obtaining a copy
+	of this software and associated documentation files (the "Software"), to deal
+	in the Software without restriction, including without limitation the rights
+	to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+	copies of the Software, and to permit persons to whom the Software is
+	furnished to do so.
 */
 
 #include <feral/std/fs_type.hpp>
@@ -40,13 +44,13 @@ int curl_progress_func( void * ptr, curl_off_t to_download, curl_off_t downloade
 	curl_vm_data_t * vmd = ( curl_vm_data_t * )ptr;
 
 	var_to_download.set_src_id_idx( vmd->src_id, vmd->idx );
-	var_to_download.get() = to_download;
+	mpfr_set_si( var_to_download.get(), to_download, mpfr_get_default_rounding_mode() );
 	var_downloaded.set_src_id_idx( vmd->src_id, vmd->idx );
-	var_downloaded.get() = downloaded;
+	mpfr_set_si( var_downloaded.get(), downloaded, mpfr_get_default_rounding_mode() );
 	var_to_upload.set_src_id_idx( vmd->src_id, vmd->idx );
-	var_to_upload.get() = to_upload;
+	mpfr_set_si( var_to_upload.get(), to_upload, mpfr_get_default_rounding_mode() );
 	var_uploaded.set_src_id_idx( vmd->src_id, vmd->idx );
-	var_uploaded.get() = uploaded;
+	mpfr_set_si( var_uploaded.get(), uploaded, mpfr_get_default_rounding_mode() );
 	if( !progress_callback->call( * vmd->vm, { nullptr, & var_to_download, & var_downloaded, & var_to_upload, & var_uploaded },
 				      {}, {}, vmd->src_id, vmd->idx ) ) {
 		vmd->vm->fail( vmd->src_id, vmd->idx, "failed to call progress callback, check error above" );
@@ -67,7 +71,7 @@ var_base_t * feral_curl_easy_set_opt_native( vm_state_t & vm, const fn_data_t & 
 			 vm.type_name( fd.args[ 2 ] ).c_str() );
 		return nullptr;
 	}
-	int opt = INT( fd.args[ 2 ] )->get().get_si();
+	int opt = mpz_get_si( INT( fd.args[ 2 ] )->get() );
 	var_base_t * arg = fd.args[ 3 ];
 	// for updating callbacks without much code repetition
 	var_base_t ** callback = nullptr;
@@ -83,7 +87,7 @@ var_base_t * feral_curl_easy_set_opt_native( vm_state_t & vm, const fn_data_t & 
 				 vm.type_name( arg ).c_str() );
 			return nullptr;
 		}
-		res = curl_easy_setopt( curl, ( CURLoption )opt, INT( arg )->get().get_si() );
+		res = curl_easy_setopt( curl, ( CURLoption )opt, mpz_get_si( INT( arg )->get() ) );
 		break;
 	}
 	case CURLOPT_URL: {
@@ -169,6 +173,6 @@ var_base_t * feral_curl_set_default_progress_func_tick( vm_state_t & vm, const f
 			 vm.type_name( arg ).c_str() );
 		return nullptr;
 	}
-	progress_func_interval_tick_max = INT( arg )->get().get_ui();
+	progress_func_interval_tick_max = mpz_get_ui( INT( arg )->get() );
 	return vm.nil;
 }
