@@ -6,7 +6,7 @@ let builder = cmake.new('curl');
 
 # requires the C curl library
 let curl_dep = builder.add_dep('curl');
-curl_dep.make_reqd(); # it's compulsory
+curl_dep.make_reqd();
 
 let curl_type = builder.add_shared_lib('curl_type');
 curl_type.add_dep(curl_dep);
