@@ -5,7 +5,7 @@ let curl = import('curl/curl');
 
 let url = 'http://212.183.159.230/10MB.zip';
 let out = '10MB.zip';
-let out_file = fs.open('10MB.zip', 'w+');
+let out_file = fs.fopen('10MB.zip', 'w+');
 
 let c = curl.new_easy();
 c.set_opt(curl.OPT_URL, url);

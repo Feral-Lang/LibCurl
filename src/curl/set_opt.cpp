@@ -19,7 +19,7 @@ var_base_t * progress_callback = nullptr;
 
 size_t progress_func_interval_tick_max = 10;
 
-int curl_progress_func( void * ptr, curl_off_t to_download, curl_off_t downloaded, 
+int curl_progress_func( void * ptr, curl_off_t to_download, curl_off_t downloaded,
 			curl_off_t to_upload, curl_off_t uploaded )
 {
 	// ensure that the file to be downloaded is not empty

@@ -33,7 +33,7 @@ struct curl_vm_data_t
 
 extern var_base_t * progress_callback;
 
-int curl_progress_func( void * ptr, curl_off_t to_download, curl_off_t downloaded, 
+int curl_progress_func( void * ptr, curl_off_t to_download, curl_off_t downloaded,
 			curl_off_t to_upload, curl_off_t uploaded );
 
 var_base_t * feral_curl_easy_set_opt_native( vm_state_t & vm, const fn_data_t & fd );
