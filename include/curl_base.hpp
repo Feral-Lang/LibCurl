@@ -32,6 +32,7 @@ struct curl_vm_data_t
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 extern var_base_t * progress_callback;
+extern std::vector< curl_slist * > hss;
 
 int curl_progress_func( void * ptr, curl_off_t to_download, curl_off_t downloaded,
 			curl_off_t to_upload, curl_off_t uploaded );

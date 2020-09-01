@@ -12,6 +12,7 @@
 */
 
 #include "../include/curl_base.hpp"
+#include <curl/curl.h>
 
 static curl_vm_data_t curl_vm_data = { nullptr, 0, 0 };
 
@@ -599,10 +600,14 @@ INIT_MODULE( curl )
 	// TELNET OPTIONS
 	src->add_native_var( "OPT_TELNETOPTIONS", make_all< var_int_t >( CURLOPT_TELNETOPTIONS, src_id, idx ) );
 
+	curl_global_init( CURL_GLOBAL_ALL );
+
 	return true;
 }
 
 DEINIT_MODULE( curl )
 {
 	var_dref( progress_callback );
+	for( auto & e : hss ) curl_slist_free_all( e );
+	curl_global_cleanup();
 }

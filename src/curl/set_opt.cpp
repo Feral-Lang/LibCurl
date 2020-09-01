@@ -16,6 +16,7 @@
 #include "../../include/curl_base.hpp"
 
 var_base_t * progress_callback = nullptr;
+std::vector< curl_slist * > hss;
 
 size_t progress_func_interval_tick_max = 10;
 
@@ -90,7 +91,10 @@ var_base_t * feral_curl_easy_set_opt_native( vm_state_t & vm, const fn_data_t & 
 		res = curl_easy_setopt( curl, ( CURLoption )opt, mpz_get_si( INT( arg )->get() ) );
 		break;
 	}
-	case CURLOPT_URL: {
+	case CURLOPT_URL:
+	case CURLOPT_USERAGENT:
+	case CURLOPT_CUSTOMREQUEST:
+	case CURLOPT_POSTFIELDS: {
 		if( !arg->istype< var_str_t >() ) {
 			vm.fail( fd.src_id, fd.idx, "expected a string as parameter for this option, found: %s",
 				 vm.type_name( arg ).c_str() );
@@ -141,6 +145,29 @@ var_base_t * feral_curl_easy_set_opt_native( vm_state_t & vm, const fn_data_t & 
 			return nullptr;
 		}
 		res = curl_easy_setopt( curl, ( CURLoption )opt, file );
+		break;
+	}
+	case CURLOPT_HTTPHEADER: {
+		if( !arg->istype< var_vec_t >() ) {
+			vm.fail( fd.src_id, fd.idx, "expected a vector of strings as parameter for this option, found: %s",
+				 vm.type_name( arg ).c_str() );
+			return nullptr;
+		}
+		std::vector< var_base_t * > & vec = VEC( arg )->get();
+		for( size_t i = 0; i < vec.size(); ++i ) {
+			if( !vec[ i ]->istype< var_str_t >() ) {
+				vm.fail( fd.src_id, fd.idx, "expected a string vector, found: %s at index: %zu",
+					 vm.type_name( vec[ i ] ).c_str(), i );
+				return nullptr;
+			}
+		}
+		struct curl_slist * hs = NULL;
+		for( auto & e : vec ) {
+			std::string & s = STR( e )->get();
+			hs = curl_slist_append( hs, s.c_str() );
+		}
+		res = curl_easy_setopt( curl, CURLOPT_HTTPHEADER, hs );
+		hss.push_back( hs );
 		break;
 	}
 	default: {
