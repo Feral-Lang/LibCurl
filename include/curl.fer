@@ -5,7 +5,9 @@ let io = import('std/io');
 
 let DEFAULT_PROGRESS_FUNC = fn(total_down, down, total_up, up) {
 	let frac_down = down / total_down;
-	io.print((frac_down * 100).round(), '%\t\r');
+	let lhs = (frac_down * 100).round();
+	let rhs = 100 - lhs;
+	io.print('[', '#' * lhs, '-' * rhs, '] ', lhs, '%\t\r');
 	io.fflush(io.stdout);
 };
 
