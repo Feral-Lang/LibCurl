@@ -1,5 +1,6 @@
 let io = import('std/io');
 let fs = import('std/fs');
+let os = import('std/os');
 let sys = import('std/sys');
 let curl = import('curl/curl');
 
@@ -20,3 +21,5 @@ if result != 0 {
 	sys.exit(result);
 }
 io.println('Downloaded file: ', out);
+os.rm(out);
+io.println('Removed downloaded file');
