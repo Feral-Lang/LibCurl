@@ -22,25 +22,25 @@
 // for passing to various callbacks
 struct curl_vm_data_t
 {
-	vm_state_t * vm;
+	vm_state_t *vm;
 	size_t src_id;
 	size_t idx;
 };
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//////////////////////////////////////////////////////////// CURL functions ////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+extern var_base_t *progress_callback;
+extern std::vector<curl_slist *> hss;
 
-extern var_base_t * progress_callback;
-extern std::vector< curl_slist * > hss;
+//////////////////////////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////// Functions ////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////
 
-int curl_progress_func( void * ptr, curl_off_t to_download, curl_off_t downloaded,
-			curl_off_t to_upload, curl_off_t uploaded );
+int curl_progress_func(void *ptr, curl_off_t to_download, curl_off_t downloaded,
+		       curl_off_t to_upload, curl_off_t uploaded);
 
-var_base_t * feral_curl_easy_set_opt_native( vm_state_t & vm, const fn_data_t & fd );
+var_base_t *feral_curl_easy_set_opt_native(vm_state_t &vm, const fn_data_t &fd);
 
 // set some default values
-var_base_t * feral_curl_set_default_progress_func( vm_state_t & vm, const fn_data_t & fd );
-var_base_t * feral_curl_set_default_progress_func_tick( vm_state_t & vm, const fn_data_t & fd );
+var_base_t *feral_curl_set_default_progress_func(vm_state_t &vm, const fn_data_t &fd);
+var_base_t *feral_curl_set_default_progress_func_tick(vm_state_t &vm, const fn_data_t &fd);
 
 #endif // FERAL_LIB_CURL_HPP
