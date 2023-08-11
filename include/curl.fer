@@ -1,5 +1,5 @@
 # the enum values are available in c++ module file (INIT_MODULE function)
-mload('curl/curl');
+mload('curl/Curl');
 
 let io = import('std/io');
 
@@ -13,10 +13,10 @@ let DEFAULT_PROGRESS_FUNC = fn(total_down, down, total_up, up) {
 
 let DEFAULT_PROGRESS_FUNC_TICK = 10;
 
-set_default_progress_func_native(DEFAULT_PROGRESS_FUNC);
-set_default_progress_func_tick_native(DEFAULT_PROGRESS_FUNC_TICK);
+setProgressFunc(DEFAULT_PROGRESS_FUNC);
+setProgressFuncTick(DEFAULT_PROGRESS_FUNC_TICK);
 
 # cannot be chained, returns CURLcode
-let set_opt in curl_t = fn(opt, val = nil) {
-	return set_opt_native(self, opt, val);
+let setOpt in CurlTy = fn(opt, val = nil) {
+	return setOptNative(self, opt, val);
 };

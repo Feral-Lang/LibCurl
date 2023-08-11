@@ -1,18 +1,17 @@
 let io = import('std/io');
-let fmt = import('std/fmt');
-let cmake = import('std/cmake_gen');
+let cmake = import('std/cmakeGen');
 
 let builder = cmake.new('curl');
 
 # requires the C curl library
-let curl_dep = builder.add_dep('curl');
-curl_dep.make_reqd();
+let curlDep = builder.addDep('curl');
+curlDep.makeReqd();
 
-let curl_type = builder.add_shared_lib('curl_type');
-curl_type.add_dep(curl_dep);
+let curlType = builder.addSharedLib('CurlType');
+curlType.addDep(curlDep);
 
-let curl_lib = builder.add_shared_lib('curl');
-curl_lib.add_dep(curl_dep).add_dep(curl_type);
-curl_lib.add_src('src/curl/set_opt.cpp');
+let curlLib = builder.addSharedLib('Curl');
+curlLib.addDep(curlDep).addDep(curlType);
+curlLib.addSrc('src/SetOpt.cpp');
 
 builder.gen();
