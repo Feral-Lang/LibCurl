@@ -3,8 +3,6 @@
 #include "CurlBase.hpp"
 #include "CurlType.hpp"
 
-static CurlVMData curlVMData = {nullptr, nullptr};
-
 //////////////////////////////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////// Functions ////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////////
@@ -17,10 +15,7 @@ Var *feralCurlEasyInit(Interpreter &vm, const ModuleLoc *loc, Span<Var *> args,
 		vm.fail(loc, "failed to run curl_easy_init()");
 		return nullptr;
 	}
-	curlVMData.vm = &vm;
-	// set all required easy_opts (especially callbacks)
-	curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, curlProgressFunc);
-	curl_easy_setopt(curl, CURLOPT_XFERINFODATA, &curlVMData);
+
 	return vm.makeVar<VarCurl>(loc, curl);
 }
 
@@ -28,9 +23,7 @@ Var *feralCurlEasyPerform(Interpreter &vm, const ModuleLoc *loc, Span<Var *> arg
 			  const Map<String, AssnArgData> &assn_args)
 {
 	CURL *curl = as<VarCurl>(args[0])->get();
-
-	curlVMData.loc = loc;
-
+	curl_easy_setopt(curl, CURLOPT_XFERINFODATA, loc);
 	return vm.makeVar<VarInt>(loc, curl_easy_perform(curl));
 }
 
@@ -48,18 +41,25 @@ Var *feralCurlEasyStrErrFromInt(Interpreter &vm, const ModuleLoc *loc, Span<Var 
 
 INIT_MODULE(Curl)
 {
+	cbVM = &vm;
+
 	VarModule *mod = vm.getCurrModule();
 
 	mod->addNativeFn("newEasy", feralCurlEasyInit);
-	mod->addNativeFn("setOptNative", feralCurlEasySetOptNative, 3);
 	mod->addNativeFn("strerr", feralCurlEasyStrErrFromInt, 1);
-	mod->addNativeFn("setProgressFunc", feralCurlSetProgressFunc, 1);
-	mod->addNativeFn("setProgressFuncTick", feralCurlSetProgressFuncTick, 1);
+	mod->addNativeFn("setWriteCallback", feralCurlSetWriteCallback, 1);
+	mod->addNativeFn("setProgressCallback", feralCurlSetProgressCallback, 1);
+	mod->addNativeFn("setProgressCallbackTick", feralCurlSetProgressCallbackTick, 1);
 
 	// register the curl type (register_type)
 	vm.registerType<VarCurl>(loc, "Curl");
 
+	vm.addNativeTypeFn<VarCurl>(loc, "newMime", feralCurlMimeNew, 0);
+	vm.addNativeTypeFn<VarCurl>(loc, "setOptNative", feralCurlEasySetOptNative, 2);
 	vm.addNativeTypeFn<VarCurl>(loc, "perform", feralCurlEasyPerform, 0);
+
+	vm.addNativeTypeFn<VarCurlMime>(loc, "addPartData", feralCurlMimePartAddData, 2);
+	vm.addNativeTypeFn<VarCurlMime>(loc, "addPartFile", feralCurlMimePartAddFile, 2);
 
 	// all the enum values
 
@@ -696,6 +696,7 @@ INIT_MODULE(Curl)
 
 DEINIT_MODULE(Curl)
 {
+	decref(writeCallback);
 	decref(progressCallback);
 	for(auto &e : hss) curl_slist_free_all(e);
 	curl_global_cleanup();
