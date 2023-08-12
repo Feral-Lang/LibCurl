@@ -12,6 +12,6 @@ curlType.addDep(curlDep);
 
 let curlLib = builder.addSharedLib('Curl');
 curlLib.addDep(curlDep).addDep(curlType);
-curlLib.addSrc('src/SetOpt.cpp');
+curlLib.addSrcs('src/SetOpt.cpp', 'src/Mime.cpp');
 
 builder.gen();

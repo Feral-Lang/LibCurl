@@ -3,20 +3,21 @@ mload('curl/Curl');
 
 let io = import('std/io');
 
-let DEFAULT_PROGRESS_FUNC = fn(total_down, down, total_up, up) {
+let writeCB = fn(dest, data) {
+	dest = data;
+};
+let progressCB = fn(total_down, down, total_up, up) {
 	let frac_down = down / total_down;
 	let lhs = (frac_down * 100).round();
 	let rhs = 100 - lhs;
 	io.print('[', '#' * lhs, '-' * rhs, '] ', lhs, '%\t\r');
 	io.fflush(io.stdout);
 };
+let progressCBTick = 10;
 
-let DEFAULT_PROGRESS_FUNC_TICK = 10;
-
-setProgressFunc(DEFAULT_PROGRESS_FUNC);
-setProgressFuncTick(DEFAULT_PROGRESS_FUNC_TICK);
+setProgressCallbackTick(progressCBTick);
 
 # cannot be chained, returns CURLcode
 let setOpt in CurlTy = fn(opt, val = nil) {
-	return setOptNative(self, opt, val);
+	return self.setOptNative(opt, val);
 };

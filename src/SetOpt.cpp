@@ -3,7 +3,11 @@
 #include "CurlBase.hpp"
 #include "CurlType.hpp"
 
+Interpreter *cbVM = nullptr;
+
 Var *progressCallback = nullptr;
+Var *writeCallback    = nullptr;
+
 Vector<curl_slist *> hss;
 
 size_t progressFuncIntervalTickMax = 10;
@@ -12,8 +16,8 @@ size_t progressFuncIntervalTickMax = 10;
 /////////////////////////////////////////// Functions ////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////////
 
-int curlProgressFunc(void *ptr, curl_off_t to_download, curl_off_t downloaded, curl_off_t to_upload,
-		     curl_off_t uploaded)
+int curlProgressCallback(void *ptr, curl_off_t to_download, curl_off_t downloaded,
+			 curl_off_t to_upload, curl_off_t uploaded)
 {
 	// ensure that the file to be downloaded is not empty
 	// because that would cause a division by zero error later on
@@ -31,45 +35,57 @@ int curlProgressFunc(void *ptr, curl_off_t to_download, curl_off_t downloaded, c
 
 	static VarFlt var_to_download(nullptr, 0.0), var_downloaded(nullptr, 0.0);
 	static VarFlt var_to_upload(nullptr, 0.0), var_uploaded(nullptr, 0.0);
+	static Array<Var *, 5> args = {nullptr, &var_to_download, &var_downloaded, &var_to_upload,
+				       &var_uploaded};
 
-	CurlVMData *vmd = (CurlVMData *)ptr;
+	const ModuleLoc *loc = (const ModuleLoc *)ptr;
 
-	var_to_download.setLoc(vmd->loc);
+	var_to_download.setLoc(loc);
 	mpfr_set_si(var_to_download.get(), to_download, mpfr_get_default_rounding_mode());
-	var_downloaded.setLoc(vmd->loc);
+	var_downloaded.setLoc(loc);
 	mpfr_set_si(var_downloaded.get(), downloaded, mpfr_get_default_rounding_mode());
-	var_to_upload.setLoc(vmd->loc);
+	var_to_upload.setLoc(loc);
 	mpfr_set_si(var_to_upload.get(), to_upload, mpfr_get_default_rounding_mode());
-	var_uploaded.setLoc(vmd->loc);
+	var_uploaded.setLoc(loc);
 	mpfr_set_si(var_uploaded.get(), uploaded, mpfr_get_default_rounding_mode());
-	Array<Var *, 5> args = {nullptr, &var_to_download, &var_downloaded, &var_to_upload,
-				&var_uploaded};
-	if(!progressCallback->call(*vmd->vm, vmd->loc, args, {})) {
-		vmd->vm->fail(vmd->loc, "failed to call progress callback, check error above");
+	if(!progressCallback->call(*cbVM, loc, args, {})) {
+		cbVM->fail(loc, "failed to call progress callback, check error above");
 		return 1;
 	}
 	return 0;
 }
 
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-//////////////////////////////////////////////////////////// CURL functions
-///////////////////////////////////////////////////////////////
-////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+size_t curlWriteCallback(char *ptr, size_t size, size_t nmemb, void *userdata)
+{
+	if(!writeCallback || !userdata) return 0;
+	VarStr *dest = (VarStr *)userdata;
+
+	static VarStr src(nullptr, "");
+	static Array<Var *, 3> args = {nullptr, dest, &src};
+	src.setLoc(dest->getLoc());
+	src.get() = StringRef(ptr, size * nmemb);
+	if(!writeCallback->call(*cbVM, dest->getLoc(), args, {})) {
+		cbVM->fail(dest->getLoc(), "failed to call write callback, check error above");
+		return 0;
+	}
+	return size * nmemb;
+}
+
+///////////////////////////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////// CURL functions ////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////////////////////////
 
 Var *feralCurlEasySetOptNative(Interpreter &vm, const ModuleLoc *loc, Span<Var *> args,
 			       const Map<String, AssnArgData> &assn_args)
 {
-	CURL *curl = as<VarCurl>(args[1])->get();
-	if(!args[2]->is<VarInt>()) {
+	CURL *curl = as<VarCurl>(args[0])->get();
+	if(!args[1]->is<VarInt>()) {
 		vm.fail(loc, "expected an integer as parameter for option type, found: ",
-			vm.getTypeName(args[2]));
+			vm.getTypeName(args[1]));
 		return nullptr;
 	}
-	int opt	 = mpz_get_si(as<VarInt>(args[2])->get());
-	Var *arg = args[3];
-	// for updating callbacks without much code repetition
-	Var **callback		  = nullptr;
-	size_t callback_arg_count = 0;
+	int opt	 = mpz_get_si(as<VarInt>(args[1])->get());
+	Var *arg = args[2];
 
 	int res = CURLE_OK;
 	// manually handle each of the options and work accordingly
@@ -96,12 +112,19 @@ Var *feralCurlEasySetOptNative(Interpreter &vm, const ModuleLoc *loc, Span<Var *
 		res = curl_easy_setopt(curl, (CURLoption)opt, as<VarStr>(arg)->get().c_str());
 		break;
 	}
+	case CURLOPT_MIMEPOST: {
+		if(!arg->is<VarCurlMime>()) {
+			vm.fail(loc, "expected curl mime as parameter for this option, found: ",
+				vm.getTypeName(arg));
+			return nullptr;
+		}
+		res = curl_easy_setopt(curl, (CURLoption)opt, as<VarCurlMime>(arg)->get());
+		break;
+	}
 	case CURLOPT_XFERINFOFUNCTION: {
-		callback	   = &progressCallback;
-		callback_arg_count = 4;
-		if(!arg->is<VarNil>()) {
-			if(*callback) decref(*callback);
-			*callback = nullptr;
+		if(arg->is<VarNil>()) {
+			if(progressCallback) decref(progressCallback);
+			progressCallback = nullptr;
 			break;
 		}
 		if(!arg->isCallable()) {
@@ -110,34 +133,66 @@ Var *feralCurlEasySetOptNative(Interpreter &vm, const ModuleLoc *loc, Span<Var *
 			return nullptr;
 		}
 		VarFn *f = as<VarFn>(arg);
-		if(f->getParams().size() + f->getAssnParam().size() < callback_arg_count) {
-			vm.fail(loc, "expected function to have ", callback_arg_count,
+		if(f->getParams().size() + f->getAssnParam().size() < 4) {
+			vm.fail(loc, "expected function to have 4",
 				" parameters for this option, found: ",
 				f->getParams().size() + f->getAssnParam().size());
 			return nullptr;
 		}
-		if(*callback) decref(*callback);
-		incref(arg);
-		*callback = f;
+		if(progressCallback) decref(progressCallback);
+		incref(f);
+		progressCallback = f;
+		curl_easy_setopt(curl, (CURLoption)opt, curlProgressCallback);
 		break;
 	}
-	case CURLOPT_WRITEDATA: {
-		if(!arg->is<VarFile>()) {
-			vm.fail(loc, "expected a file as parameter for this option, found: ",
+	case CURLOPT_WRITEFUNCTION: {
+		if(arg->is<VarNil>()) {
+			if(writeCallback) decref(writeCallback);
+			writeCallback = nullptr;
+			break;
+		}
+		if(!arg->isCallable()) {
+			vm.fail(loc, "expected a callable as parameter for this option, found: ",
 				vm.getTypeName(arg));
 			return nullptr;
 		}
-		FILE *file     = as<VarFile>(arg)->getFile();
-		StringRef mode = as<VarFile>(arg)->getMode();
-		if(mode.find('w') == std::string::npos && mode.find('a') == std::string::npos) {
-			vm.fail(loc, "file is not writable, opened mode: ", mode);
+		VarFn *f = as<VarFn>(arg);
+		if(f->getParams().size() + f->getAssnParam().size() < 2) {
+			vm.fail(loc, "expected function to have 2",
+				" parameters for this option, found: ",
+				f->getParams().size() + f->getAssnParam().size());
 			return nullptr;
 		}
-		if(!file) {
-			vm.fail(loc, "given file is not open");
+		if(writeCallback) decref(writeCallback);
+		incref(f);
+		writeCallback = f;
+		curl_easy_setopt(curl, (CURLoption)opt, curlWriteCallback);
+		break;
+	}
+	case CURLOPT_WRITEDATA: {
+		if(!arg->is<VarFile>() && !arg->is<VarStr>()) {
+			vm.fail(loc,
+				"expected a file or string as parameter for this option, found: ",
+				vm.getTypeName(arg));
 			return nullptr;
 		}
-		res = curl_easy_setopt(curl, (CURLoption)opt, file);
+		if(arg->is<VarFile>()) {
+			FILE *file     = as<VarFile>(arg)->getFile();
+			StringRef mode = as<VarFile>(arg)->getMode();
+			if(mode.find('w') == std::string::npos &&
+			   mode.find('a') == std::string::npos)
+			{
+				vm.fail(loc, "file is not writable, opened mode: ", mode);
+				return nullptr;
+			}
+			if(!file) {
+				vm.fail(loc, "given file is not open");
+				return nullptr;
+			}
+			res = curl_easy_setopt(curl, (CURLoption)opt, file);
+		} else if(arg->is<VarStr>()) {
+			res = curl_easy_setopt(curl, (CURLoption)opt, arg);
+		}
 		break;
 	}
 	case CURLOPT_HTTPHEADER: {
@@ -173,15 +228,31 @@ Var *feralCurlEasySetOptNative(Interpreter &vm, const ModuleLoc *loc, Span<Var *
 	return vm.makeVar<VarInt>(loc, res);
 }
 
-Var *feralCurlSetProgressFunc(Interpreter &vm, const ModuleLoc *loc, Span<Var *> args,
-			      const Map<String, AssnArgData> &assn_args)
+Var *feralCurlSetWriteCallback(Interpreter &vm, const ModuleLoc *loc, Span<Var *> args,
+			       const Map<String, AssnArgData> &assn_args)
 {
 	Var *arg = args[1];
 	if(!arg->isCallable()) {
 		vm.fail(
-		loc,
-		"expected a callable as parameter for setting default progress function, found: ",
+		loc, "expected a callable as parameter for setting default write function, found: ",
 		vm.getTypeName(arg));
+		return nullptr;
+	}
+	if(writeCallback) decref(writeCallback);
+	incref(arg);
+	writeCallback = as<VarFn>(arg);
+	return vm.getNil();
+}
+
+Var *feralCurlSetProgressCallback(Interpreter &vm, const ModuleLoc *loc, Span<Var *> args,
+				  const Map<String, AssnArgData> &assn_args)
+{
+	Var *arg = args[1];
+	if(!arg->isCallable()) {
+		vm.fail(loc,
+			"expected a callable as parameter for"
+			" setting default progress function, found: ",
+			vm.getTypeName(arg));
 		return nullptr;
 	}
 	if(progressCallback) decref(progressCallback);
@@ -190,8 +261,8 @@ Var *feralCurlSetProgressFunc(Interpreter &vm, const ModuleLoc *loc, Span<Var *>
 	return vm.getNil();
 }
 
-Var *feralCurlSetProgressFuncTick(Interpreter &vm, const ModuleLoc *loc, Span<Var *> args,
-				  const Map<String, AssnArgData> &assn_args)
+Var *feralCurlSetProgressCallbackTick(Interpreter &vm, const ModuleLoc *loc, Span<Var *> args,
+				      const Map<String, AssnArgData> &assn_args)
 {
 	Var *arg = args[1];
 	if(!arg->is<VarInt>()) {
