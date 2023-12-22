@@ -35,7 +35,7 @@ Var *feralCurlEasyStrErrFromInt(Interpreter &vm, const ModuleLoc *loc, Span<Var 
 			vm.getTypeName(args[1]));
 		return nullptr;
 	}
-	CURLcode code = (CURLcode)mpz_get_si(as<VarInt>(args[1])->get());
+	CURLcode code = (CURLcode)as<VarInt>(args[1])->get();
 	return vm.makeVar<VarStr>(loc, curl_easy_strerror(code));
 }
 
