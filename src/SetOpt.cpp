@@ -41,13 +41,13 @@ int curlProgressCallback(void *ptr, curl_off_t to_download, curl_off_t downloade
 	const ModuleLoc *loc = (const ModuleLoc *)ptr;
 
 	var_to_download.setLoc(loc);
-	mpfr_set_si(var_to_download.get(), to_download, mpfr_get_default_rounding_mode());
+	var_to_download.set(to_download);
 	var_downloaded.setLoc(loc);
-	mpfr_set_si(var_downloaded.get(), downloaded, mpfr_get_default_rounding_mode());
+	var_downloaded.set(downloaded);
 	var_to_upload.setLoc(loc);
-	mpfr_set_si(var_to_upload.get(), to_upload, mpfr_get_default_rounding_mode());
+	var_to_upload.set(to_upload);
 	var_uploaded.setLoc(loc);
-	mpfr_set_si(var_uploaded.get(), uploaded, mpfr_get_default_rounding_mode());
+	var_uploaded.set(uploaded);
 	if(!progressCallback->call(*cbVM, loc, args, {})) {
 		cbVM->fail(loc, "failed to call progress callback, check error above");
 		return 1;
@@ -84,7 +84,7 @@ Var *feralCurlEasySetOptNative(Interpreter &vm, const ModuleLoc *loc, Span<Var *
 			vm.getTypeName(args[1]));
 		return nullptr;
 	}
-	int opt	 = mpz_get_si(as<VarInt>(args[1])->get());
+	int opt	 = as<VarInt>(args[1])->get();
 	Var *arg = args[2];
 
 	int res = CURLE_OK;
@@ -97,7 +97,7 @@ Var *feralCurlEasySetOptNative(Interpreter &vm, const ModuleLoc *loc, Span<Var *
 				vm.getTypeName(arg));
 			return nullptr;
 		}
-		res = curl_easy_setopt(curl, (CURLoption)opt, mpz_get_si(as<VarInt>(arg)->get()));
+		res = curl_easy_setopt(curl, (CURLoption)opt, as<VarInt>(arg)->get());
 		break;
 	}
 	case CURLOPT_URL:
@@ -272,6 +272,6 @@ Var *feralCurlSetProgressCallbackTick(Interpreter &vm, const ModuleLoc *loc, Spa
 			vm.getTypeName(arg));
 		return nullptr;
 	}
-	progressFuncIntervalTickMax = mpz_get_ui(as<VarInt>(arg)->get());
+	progressFuncIntervalTickMax = as<VarInt>(arg)->get();
 	return vm.getNil();
 }
