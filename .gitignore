@@ -6,6 +6,10 @@
 compile_commands.json
 *.swp
 
+# Windows trash #
+##########################
+$null
+
 # TeX intermediate files #
 ##########################
 *.out
@@ -15,7 +19,6 @@ compile_commands.json
 ###############
 CMakeLists.txt
 testbin/
-bin/
 /lib/
 build/
 dockerbuild/
@@ -24,13 +27,15 @@ CMakeFiles/
 doxygen/
 flag_cache
 book/book/
-src/Compiler/Config.hpp
+include/Config.hpp
+.cache/
 
 # Extra data #
 #######################
 tmp*
 tests/*.json
 *.zip
+vgcore.*
 
 # Build file on BSD #
 #####################
