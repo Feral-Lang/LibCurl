@@ -1,6 +1,9 @@
 #include "CurlBase.hpp"
 #include "CurlType.hpp"
 
+namespace fer
+{
+
 Var *feralCurlMimeNew(Interpreter &vm, const ModuleLoc *loc, Span<Var *> args,
 		      const Map<String, AssnArgData> &assn_args)
 {
@@ -41,3 +44,5 @@ Var *feralCurlMimePartAddFile(Interpreter &vm, const ModuleLoc *loc, Span<Var *>
 	curl_mime_filedata(res->get(), as<VarStr>(args[2])->get().c_str());
 	return res;
 }
+
+} // namespace fer

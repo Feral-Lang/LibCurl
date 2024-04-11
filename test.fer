@@ -6,20 +6,23 @@ let curl = import('curl/curl');
 
 let url = 'http://212.183.159.230/10MB.zip';
 let out = '10MB.zip';
-let outFile = fs.fopen('10MB.zip', 'w+');
+# scoped so that outFile is closed before attempting to remove it
+# otherwise, an error is produced on windows
+{
+	let outFile = fs.fopen('10MB.zip', 'w+');
 
-let c = curl.newEasy();
-c.setOpt(curl.OPT_URL, url);
-c.setOpt(curl.OPT_FOLLOWLOCATION, 1);
-c.setOpt(curl.OPT_NOPROGRESS, 0);
-c.setOpt(curl.OPT_XFERINFOFUNCTION, curl.progressCB);
-c.setOpt(curl.OPT_WRITEDATA, outFile);
-let result = c.perform();
-
-io.println();
-if result != curl.E_OK {
-	io.println('Failed to download file \'', url, '\' to \'', out, '\'');
-	sys.exit(result);
+	let c = curl.newEasy();
+	c.setOpt(curl.OPT_URL, url);
+	c.setOpt(curl.OPT_FOLLOWLOCATION, 1);
+	c.setOpt(curl.OPT_NOPROGRESS, 0);
+	c.setOpt(curl.OPT_XFERINFOFUNCTION, curl.progressCB);
+	c.setOpt(curl.OPT_WRITEDATA, outFile);
+	let result = c.perform();
+	io.println();
+	if result != curl.E_OK {
+		io.println('Failed to download file \'', url, '\' to \'', out, '\'');
+		sys.exit(result);
+	}
 }
 io.println('Downloaded file: ', out);
 os.rm(out);

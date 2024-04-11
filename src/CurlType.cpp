@@ -1,11 +1,14 @@
 #include "CurlType.hpp"
 
+namespace fer
+{
+
 //////////////////////////////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////// VARCURL //////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////////
 
 VarCurl::VarCurl(const ModuleLoc *loc, CURL *const val, bool owner)
-	: Var(loc, typeID<VarCurl>(), false, false), val(val), owner(owner)
+	: Var(loc, false, false), val(val), owner(owner)
 {}
 VarCurl::~VarCurl()
 {
@@ -26,7 +29,7 @@ void VarCurl::set(Var *from)
 //////////////////////////////////////////////////////////////////////////////////////////////////
 
 VarCurlMimePart::VarCurlMimePart(const ModuleLoc *loc, curl_mimepart *const val)
-	: Var(loc, typeID<VarCurlMimePart>(), false, false), val(val)
+	: Var(loc, false, false), val(val)
 {}
 VarCurlMimePart::~VarCurlMimePart() {}
 
@@ -39,7 +42,7 @@ void VarCurlMimePart::set(Var *from) { val = as<VarCurlMimePart>(from)->get(); }
 //////////////////////////////////////////////////////////////////////////////////////////////////
 
 VarCurlMime::VarCurlMime(const ModuleLoc *loc, curl_mime *const val, bool owner)
-	: Var(loc, typeID<VarCurlMime>(), false, false), val(val), owner(owner)
+	: Var(loc, false, false), val(val), owner(owner)
 {}
 VarCurlMime::~VarCurlMime()
 {
@@ -54,3 +57,5 @@ void VarCurlMime::set(Var *from)
 	owner = false;
 	val   = as<VarCurlMime>(from)->get();
 }
+
+} // namespace fer
