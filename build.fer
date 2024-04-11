@@ -4,8 +4,8 @@ let cmake = import('std/cmakeGen');
 let builder = cmake.new('curl');
 
 # requires the C curl library
-let curlDep = builder.addDep('curl');
-curlDep.makeReqd();
+let curlDep = builder.addPkgDep('CURL');
+curlDep.makeReqd().setVarName('CURL::libcurl');
 
 let curlType = builder.addSharedLib('CurlType');
 curlType.addDep(curlDep);

@@ -3,7 +3,8 @@
 #include <curl/curl.h>
 #include <VM/Interpreter.hpp>
 
-using namespace fer;
+namespace fer
+{
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////// VARCURL //////////////////////////////////////////////
@@ -53,3 +54,5 @@ public:
 	inline curl_mime *const get() { return val; }
 	inline curl_mimepart *addPart() { return curl_mime_addpart(val); }
 };
+
+} // namespace fer

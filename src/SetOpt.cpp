@@ -3,6 +3,9 @@
 #include "CurlBase.hpp"
 #include "CurlType.hpp"
 
+namespace fer
+{
+
 Interpreter *cbVM = nullptr;
 
 Var *progressCallback = nullptr;
@@ -275,3 +278,5 @@ Var *feralCurlSetProgressCallbackTick(Interpreter &vm, const ModuleLoc *loc, Spa
 	progressFuncIntervalTickMax = as<VarInt>(arg)->get();
 	return vm.getNil();
 }
+
+} // namespace fer

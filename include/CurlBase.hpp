@@ -3,7 +3,8 @@
 #include <curl/curl.h>
 #include <VM/Interpreter.hpp>
 
-using namespace fer;
+namespace fer
+{
 
 // for use in callbacks
 extern Interpreter *cbVM;
@@ -40,3 +41,5 @@ Var *feralCurlMimePartAddData(Interpreter &vm, const ModuleLoc *loc, Span<Var *>
 			      const Map<String, AssnArgData> &assn_args);
 Var *feralCurlMimePartAddFile(Interpreter &vm, const ModuleLoc *loc, Span<Var *> args,
 			      const Map<String, AssnArgData> &assn_args);
+
+} // namespace fer
