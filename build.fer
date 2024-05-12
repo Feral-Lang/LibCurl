@@ -1,4 +1,3 @@
-let io = import('std/io');
 let cmake = import('std/cmakeGen');
 
 let builder = cmake.new('curl');
