@@ -79,7 +79,7 @@ size_t curlWriteCallback(char *ptr, size_t size, size_t nmemb, void *userdata)
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
 Var *feralCurlEasySetOptNative(Interpreter &vm, const ModuleLoc *loc, Span<Var *> args,
-			       const Map<String, AssnArgData> &assn_args)
+			       const StringMap<AssnArgData> &assn_args)
 {
 	CURL *curl = as<VarCurl>(args[0])->get();
 	if(!args[1]->is<VarInt>()) {
@@ -232,7 +232,7 @@ Var *feralCurlEasySetOptNative(Interpreter &vm, const ModuleLoc *loc, Span<Var *
 }
 
 Var *feralCurlSetWriteCallback(Interpreter &vm, const ModuleLoc *loc, Span<Var *> args,
-			       const Map<String, AssnArgData> &assn_args)
+			       const StringMap<AssnArgData> &assn_args)
 {
 	Var *arg = args[1];
 	if(!arg->isCallable()) {
@@ -248,7 +248,7 @@ Var *feralCurlSetWriteCallback(Interpreter &vm, const ModuleLoc *loc, Span<Var *
 }
 
 Var *feralCurlSetProgressCallback(Interpreter &vm, const ModuleLoc *loc, Span<Var *> args,
-				  const Map<String, AssnArgData> &assn_args)
+				  const StringMap<AssnArgData> &assn_args)
 {
 	Var *arg = args[1];
 	if(!arg->isCallable()) {
@@ -265,7 +265,7 @@ Var *feralCurlSetProgressCallback(Interpreter &vm, const ModuleLoc *loc, Span<Va
 }
 
 Var *feralCurlSetProgressCallbackTick(Interpreter &vm, const ModuleLoc *loc, Span<Var *> args,
-				      const Map<String, AssnArgData> &assn_args)
+				      const StringMap<AssnArgData> &assn_args)
 {
 	Var *arg = args[1];
 	if(!arg->is<VarInt>()) {

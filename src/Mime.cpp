@@ -5,13 +5,13 @@ namespace fer
 {
 
 Var *feralCurlMimeNew(Interpreter &vm, const ModuleLoc *loc, Span<Var *> args,
-		      const Map<String, AssnArgData> &assn_args)
+		      const StringMap<AssnArgData> &assn_args)
 {
 	return vm.makeVar<VarCurlMime>(loc, curl_mime_init(as<VarCurl>(args[0])->get()));
 }
 
 Var *feralCurlMimePartAddData(Interpreter &vm, const ModuleLoc *loc, Span<Var *> args,
-			      const Map<String, AssnArgData> &assn_args)
+			      const StringMap<AssnArgData> &assn_args)
 {
 	if(!args[1]->is<VarStr>()) {
 		vm.fail(loc, "expected part name to be a string");
@@ -29,7 +29,7 @@ Var *feralCurlMimePartAddData(Interpreter &vm, const ModuleLoc *loc, Span<Var *>
 }
 
 Var *feralCurlMimePartAddFile(Interpreter &vm, const ModuleLoc *loc, Span<Var *> args,
-			      const Map<String, AssnArgData> &assn_args)
+			      const StringMap<AssnArgData> &assn_args)
 {
 	if(!args[1]->is<VarStr>()) {
 		vm.fail(loc, "expected part name to be a string");
