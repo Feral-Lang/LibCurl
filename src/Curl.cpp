@@ -9,7 +9,7 @@ namespace fer
 //////////////////////////////////////////////////////////////////////////////////////////////////
 
 Var *feralCurlEasyInit(Interpreter &vm, const ModuleLoc *loc, Span<Var *> args,
-		       const Map<String, AssnArgData> &assn_args)
+		       const StringMap<AssnArgData> &assn_args)
 {
 	CURL *curl = curl_easy_init();
 	if(!curl) {
@@ -21,7 +21,7 @@ Var *feralCurlEasyInit(Interpreter &vm, const ModuleLoc *loc, Span<Var *> args,
 }
 
 Var *feralCurlEasyPerform(Interpreter &vm, const ModuleLoc *loc, Span<Var *> args,
-			  const Map<String, AssnArgData> &assn_args)
+			  const StringMap<AssnArgData> &assn_args)
 {
 	CURL *curl = as<VarCurl>(args[0])->get();
 	curl_easy_setopt(curl, CURLOPT_XFERINFODATA, loc);
@@ -29,7 +29,7 @@ Var *feralCurlEasyPerform(Interpreter &vm, const ModuleLoc *loc, Span<Var *> arg
 }
 
 Var *feralCurlEasyStrErrFromInt(Interpreter &vm, const ModuleLoc *loc, Span<Var *> args,
-				const Map<String, AssnArgData> &assn_args)
+				const StringMap<AssnArgData> &assn_args)
 {
 	if(!args[1]->is<VarInt>()) {
 		vm.fail(args[1]->getLoc(), "expected error code to be of type 'int', found: ",

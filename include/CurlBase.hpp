@@ -23,23 +23,23 @@ int curlProgressCallback(void *ptr, curl_off_t to_download, curl_off_t downloade
 size_t curlWriteCallback(char *ptr, size_t size, size_t nmemb, void *userdata);
 
 Var *feralCurlEasySetOptNative(Interpreter &vm, const ModuleLoc *loc, Span<Var *> args,
-			       const Map<String, AssnArgData> &assn_args);
+			       const StringMap<AssnArgData> &assn_args);
 
 // set some default values
 Var *feralCurlSetWriteCallback(Interpreter &vm, const ModuleLoc *loc, Span<Var *> args,
-			       const Map<String, AssnArgData> &assn_args);
+			       const StringMap<AssnArgData> &assn_args);
 Var *feralCurlSetProgressCallback(Interpreter &vm, const ModuleLoc *loc, Span<Var *> args,
-				  const Map<String, AssnArgData> &assn_args);
+				  const StringMap<AssnArgData> &assn_args);
 Var *feralCurlSetProgressCallbackTick(Interpreter &vm, const ModuleLoc *loc, Span<Var *> args,
-				      const Map<String, AssnArgData> &assn_args);
+				      const StringMap<AssnArgData> &assn_args);
 
 // Mime Functions
 
 Var *feralCurlMimeNew(Interpreter &vm, const ModuleLoc *loc, Span<Var *> args,
-		      const Map<String, AssnArgData> &assn_args);
+		      const StringMap<AssnArgData> &assn_args);
 Var *feralCurlMimePartAddData(Interpreter &vm, const ModuleLoc *loc, Span<Var *> args,
-			      const Map<String, AssnArgData> &assn_args);
+			      const StringMap<AssnArgData> &assn_args);
 Var *feralCurlMimePartAddFile(Interpreter &vm, const ModuleLoc *loc, Span<Var *> args,
-			      const Map<String, AssnArgData> &assn_args);
+			      const StringMap<AssnArgData> &assn_args);
 
 } // namespace fer
