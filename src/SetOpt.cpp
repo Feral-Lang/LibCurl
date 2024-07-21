@@ -112,7 +112,12 @@ Var *feralCurlEasySetOptNative(Interpreter &vm, const ModuleLoc *loc, Span<Var *
 				vm.getTypeName(arg));
 			return nullptr;
 		}
-		res = curl_easy_setopt(curl, (CURLoption)opt, as<VarStr>(arg)->get().c_str());
+		// tmp shenanigans because curl does not copy the string for POSTFIELDS in an
+		// internal buffer
+		static String tmp;
+		tmp.clear();
+		tmp = as<VarStr>(arg)->get();
+		res = curl_easy_setopt(curl, (CURLoption)opt, tmp.c_str());
 		break;
 	}
 	case CURLOPT_MIMEPOST: {
