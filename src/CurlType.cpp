@@ -15,7 +15,7 @@ VarCurl::~VarCurl()
 	if(owner && val) curl_easy_cleanup(val);
 }
 
-Var *VarCurl::copy(const ModuleLoc *loc) { return new VarCurl(loc, val, false); }
+Var *VarCurl::copyImpl(const ModuleLoc *loc) { return new VarCurl(loc, val, false); }
 
 void VarCurl::set(Var *from)
 {
@@ -33,7 +33,7 @@ VarCurlMimePart::VarCurlMimePart(const ModuleLoc *loc, curl_mimepart *const val)
 {}
 VarCurlMimePart::~VarCurlMimePart() {}
 
-Var *VarCurlMimePart::copy(const ModuleLoc *loc) { return new VarCurlMimePart(loc, val); }
+Var *VarCurlMimePart::copyImpl(const ModuleLoc *loc) { return new VarCurlMimePart(loc, val); }
 
 void VarCurlMimePart::set(Var *from) { val = as<VarCurlMimePart>(from)->get(); }
 
@@ -49,7 +49,7 @@ VarCurlMime::~VarCurlMime()
 	if(owner && val) curl_mime_free(val);
 }
 
-Var *VarCurlMime::copy(const ModuleLoc *loc) { return new VarCurlMime(loc, val, false); }
+Var *VarCurlMime::copyImpl(const ModuleLoc *loc) { return new VarCurlMime(loc, val, false); }
 
 void VarCurlMime::set(Var *from)
 {

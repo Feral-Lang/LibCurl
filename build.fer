@@ -1,16 +1,12 @@
-let cmake = import('std/cmakeGen');
+let builder = import('pkg/builder');
 
-let builder = cmake.new('curl');
+let project = builder.get();
 
-# requires the C curl library
-let curlDep = builder.addPkgDep('CURL');
-curlDep.makeReqd().setVarName('CURL::libcurl');
+let libCurl = project.addSystemLibrary('CURL');
+libCurl.makeRequired().setTargetName('CURL::libcurl');
 
-let curlType = builder.addSharedLib('CurlType');
-curlType.addDep(curlDep);
+let feralCurlType = project.addLibrary('CurlType', 'CurlType.cpp');
+feralCurlType.dependsOn(libCurl);
 
-let curlLib = builder.addSharedLib('Curl');
-curlLib.addDep(curlDep).addDep(curlType);
-curlLib.addSrcs('src/SetOpt.cpp', 'src/Mime.cpp');
-
-builder.gen();
+let feralCurl = project.addLibrary('Curl', 'Curl.cpp', 'SetOpt.cpp', 'Mime.cpp'); # `src/` is not needed here
+feralCurl.dependsOn(libCurl, feralCurlType);

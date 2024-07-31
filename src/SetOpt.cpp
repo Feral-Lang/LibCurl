@@ -1,5 +1,3 @@
-#include <std/FSType.hpp>
-
 #include "CurlBase.hpp"
 #include "CurlType.hpp"
 
