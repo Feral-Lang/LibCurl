@@ -1,7 +1,6 @@
 let io = import('std/io');
 let fs = import('std/fs');
 let os = import('std/os');
-let sys = import('std/sys');
 let curl = import('curl/curl');
 
 let url = 'http://212.183.159.230/10MB.zip';
@@ -21,9 +20,9 @@ let out = '10MB.zip';
 	io.println();
 	if result != curl.E_OK {
 		io.println('Failed to download file \'', url, '\' to \'', out, '\'');
-		sys.exit(result);
+		feral.exit(result);
 	}
 }
 io.println('Downloaded file: ', out);
-os.rm(out);
+fs.remove(out);
 io.println('Removed downloaded file');
