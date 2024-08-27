@@ -7,7 +7,7 @@ namespace fer
 /////////////////////////////////////////// VARCURL //////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////////
 
-VarCurl::VarCurl(const ModuleLoc *loc, CURL *const val, bool owner)
+VarCurl::VarCurl(ModuleLoc loc, CURL *const val, bool owner)
 	: Var(loc, false, false), val(val), owner(owner)
 {}
 VarCurl::~VarCurl()
@@ -15,33 +15,40 @@ VarCurl::~VarCurl()
 	if(owner && val) curl_easy_cleanup(val);
 }
 
-Var *VarCurl::copyImpl(const ModuleLoc *loc) { return new VarCurl(loc, val, false); }
-
-void VarCurl::set(Var *from)
+Var *VarCurl::onCopy(Interpreter &vm, ModuleLoc loc)
+{
+	return vm.makeVarWithRef<VarCurl>(loc, val, false);
+}
+void VarCurl::onSet(Interpreter &vm, Var *from)
 {
 	if(owner && val) curl_easy_cleanup(val);
 	owner = false;
-	val   = as<VarCurl>(from)->get();
+	val   = as<VarCurl>(from)->getVal();
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
 //////////////////////////////////////// VARCURLMIMEPART /////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////////
 
-VarCurlMimePart::VarCurlMimePart(const ModuleLoc *loc, curl_mimepart *const val)
+VarCurlMimePart::VarCurlMimePart(ModuleLoc loc, curl_mimepart *const val)
 	: Var(loc, false, false), val(val)
 {}
 VarCurlMimePart::~VarCurlMimePart() {}
 
-Var *VarCurlMimePart::copyImpl(const ModuleLoc *loc) { return new VarCurlMimePart(loc, val); }
-
-void VarCurlMimePart::set(Var *from) { val = as<VarCurlMimePart>(from)->get(); }
+Var *VarCurlMimePart::onCopy(Interpreter &vm, ModuleLoc loc)
+{
+	return vm.makeVarWithRef<VarCurlMimePart>(loc, val);
+}
+void VarCurlMimePart::onSet(Interpreter &vm, Var *from)
+{
+	val = as<VarCurlMimePart>(from)->getVal();
+}
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////// VARCURLMIME //////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////////
 
-VarCurlMime::VarCurlMime(const ModuleLoc *loc, curl_mime *const val, bool owner)
+VarCurlMime::VarCurlMime(ModuleLoc loc, curl_mime *const val, bool owner)
 	: Var(loc, false, false), val(val), owner(owner)
 {}
 VarCurlMime::~VarCurlMime()
@@ -49,13 +56,15 @@ VarCurlMime::~VarCurlMime()
 	if(owner && val) curl_mime_free(val);
 }
 
-Var *VarCurlMime::copyImpl(const ModuleLoc *loc) { return new VarCurlMime(loc, val, false); }
-
-void VarCurlMime::set(Var *from)
+Var *VarCurlMime::onCopy(Interpreter &vm, ModuleLoc loc)
+{
+	return vm.makeVarWithRef<VarCurlMime>(loc, val, false);
+}
+void VarCurlMime::onSet(Interpreter &vm, Var *from)
 {
 	if(owner && val) curl_mime_free(val);
 	owner = false;
-	val   = as<VarCurlMime>(from)->get();
+	val   = as<VarCurlMime>(from)->getVal();
 }
 
 } // namespace fer
