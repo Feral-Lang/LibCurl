@@ -34,21 +34,21 @@ int curlProgressCallback(void *ptr, curl_off_t to_download, curl_off_t downloade
 
 	interval_tick = 0;
 
-	static VarFlt var_to_download(nullptr, 0.0), var_downloaded(nullptr, 0.0);
-	static VarFlt var_to_upload(nullptr, 0.0), var_uploaded(nullptr, 0.0);
+	static VarFlt var_to_download({}, 0.0), var_downloaded({}, 0.0);
+	static VarFlt var_to_upload({}, 0.0), var_uploaded({}, 0.0);
 	static Array<Var *, 5> args = {nullptr, &var_to_download, &var_downloaded, &var_to_upload,
 				       &var_uploaded};
 
-	const ModuleLoc *loc = (const ModuleLoc *)ptr;
+	ModuleLoc loc = *(ModuleLoc *)ptr;
 
 	var_to_download.setLoc(loc);
-	var_to_download.set(to_download);
+	var_to_download.setVal(to_download);
 	var_downloaded.setLoc(loc);
-	var_downloaded.set(downloaded);
+	var_downloaded.setVal(downloaded);
 	var_to_upload.setLoc(loc);
-	var_to_upload.set(to_upload);
+	var_to_upload.setVal(to_upload);
 	var_uploaded.setLoc(loc);
-	var_uploaded.set(uploaded);
+	var_uploaded.setVal(uploaded);
 	if(!progressCallback->call(*cbVM, loc, args, {})) {
 		cbVM->fail(loc, "failed to call progress callback, check error above");
 		return 1;
@@ -61,10 +61,10 @@ size_t curlWriteCallback(char *ptr, size_t size, size_t nmemb, void *userdata)
 	if(!writeCallback || !userdata) return 0;
 	VarStr *dest = (VarStr *)userdata;
 
-	static VarStr src(nullptr, "");
+	static VarStr src({}, "");
 	static Array<Var *, 3> args = {nullptr, dest, &src};
 	src.setLoc(dest->getLoc());
-	src.get() = StringRef(ptr, size * nmemb);
+	src.setVal(StringRef(ptr, size * nmemb));
 	if(!writeCallback->call(*cbVM, dest->getLoc(), args, {})) {
 		cbVM->fail(dest->getLoc(), "failed to call write callback, check error above");
 		return 0;
@@ -76,16 +76,16 @@ size_t curlWriteCallback(char *ptr, size_t size, size_t nmemb, void *userdata)
 /////////////////////////////////////// CURL functions ////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-Var *feralCurlEasySetOptNative(Interpreter &vm, const ModuleLoc *loc, Span<Var *> args,
+Var *feralCurlEasySetOptNative(Interpreter &vm, ModuleLoc loc, Span<Var *> args,
 			       const StringMap<AssnArgData> &assn_args)
 {
-	CURL *curl = as<VarCurl>(args[0])->get();
+	CURL *curl = as<VarCurl>(args[0])->getVal();
 	if(!args[1]->is<VarInt>()) {
 		vm.fail(loc, "expected an integer as parameter for option type, found: ",
 			vm.getTypeName(args[1]));
 		return nullptr;
 	}
-	int opt	 = as<VarInt>(args[1])->get();
+	int opt	 = as<VarInt>(args[1])->getVal();
 	Var *arg = args[2];
 
 	int res = CURLE_OK;
@@ -98,7 +98,7 @@ Var *feralCurlEasySetOptNative(Interpreter &vm, const ModuleLoc *loc, Span<Var *
 				vm.getTypeName(arg));
 			return nullptr;
 		}
-		res = curl_easy_setopt(curl, (CURLoption)opt, as<VarInt>(arg)->get());
+		res = curl_easy_setopt(curl, (CURLoption)opt, as<VarInt>(arg)->getVal());
 		break;
 	}
 	case CURLOPT_URL:
@@ -114,7 +114,7 @@ Var *feralCurlEasySetOptNative(Interpreter &vm, const ModuleLoc *loc, Span<Var *
 		// internal buffer
 		static String tmp;
 		tmp.clear();
-		tmp = as<VarStr>(arg)->get();
+		tmp = as<VarStr>(arg)->getVal();
 		res = curl_easy_setopt(curl, (CURLoption)opt, tmp.c_str());
 		break;
 	}
@@ -124,12 +124,12 @@ Var *feralCurlEasySetOptNative(Interpreter &vm, const ModuleLoc *loc, Span<Var *
 				vm.getTypeName(arg));
 			return nullptr;
 		}
-		res = curl_easy_setopt(curl, (CURLoption)opt, as<VarCurlMime>(arg)->get());
+		res = curl_easy_setopt(curl, (CURLoption)opt, as<VarCurlMime>(arg)->getVal());
 		break;
 	}
 	case CURLOPT_XFERINFOFUNCTION: {
 		if(arg->is<VarNil>()) {
-			if(progressCallback) decref(progressCallback);
+			if(progressCallback) vm.decVarRef(progressCallback);
 			progressCallback = nullptr;
 			break;
 		}
@@ -145,15 +145,15 @@ Var *feralCurlEasySetOptNative(Interpreter &vm, const ModuleLoc *loc, Span<Var *
 				f->getParams().size() + f->getAssnParam().size());
 			return nullptr;
 		}
-		if(progressCallback) decref(progressCallback);
-		incref(f);
+		if(progressCallback) vm.decVarRef(progressCallback);
+		vm.incVarRef(f);
 		progressCallback = f;
 		curl_easy_setopt(curl, (CURLoption)opt, curlProgressCallback);
 		break;
 	}
 	case CURLOPT_WRITEFUNCTION: {
 		if(arg->is<VarNil>()) {
-			if(writeCallback) decref(writeCallback);
+			if(writeCallback) vm.decVarRef(writeCallback);
 			writeCallback = nullptr;
 			break;
 		}
@@ -169,8 +169,8 @@ Var *feralCurlEasySetOptNative(Interpreter &vm, const ModuleLoc *loc, Span<Var *
 				f->getParams().size() + f->getAssnParam().size());
 			return nullptr;
 		}
-		if(writeCallback) decref(writeCallback);
-		incref(f);
+		if(writeCallback) vm.decVarRef(writeCallback);
+		vm.incVarRef(f);
 		writeCallback = f;
 		curl_easy_setopt(curl, (CURLoption)opt, curlWriteCallback);
 		break;
@@ -208,7 +208,7 @@ Var *feralCurlEasySetOptNative(Interpreter &vm, const ModuleLoc *loc, Span<Var *
 			vm.getTypeName(arg));
 			return nullptr;
 		}
-		Vector<Var *> &vec = as<VarVec>(arg)->get();
+		Vector<Var *> &vec = as<VarVec>(arg)->getVal();
 		for(size_t i = 0; i < vec.size(); ++i) {
 			if(!vec[i]->is<VarStr>()) {
 				vm.fail(loc,
@@ -219,7 +219,7 @@ Var *feralCurlEasySetOptNative(Interpreter &vm, const ModuleLoc *loc, Span<Var *
 		}
 		struct curl_slist *hs = NULL;
 		for(auto &e : vec) {
-			String &s = as<VarStr>(e)->get();
+			String &s = as<VarStr>(e)->getVal();
 			hs	  = curl_slist_append(hs, s.c_str());
 		}
 		res = curl_easy_setopt(curl, CURLOPT_HTTPHEADER, hs);
@@ -234,7 +234,7 @@ Var *feralCurlEasySetOptNative(Interpreter &vm, const ModuleLoc *loc, Span<Var *
 	return vm.makeVar<VarInt>(loc, res);
 }
 
-Var *feralCurlSetWriteCallback(Interpreter &vm, const ModuleLoc *loc, Span<Var *> args,
+Var *feralCurlSetWriteCallback(Interpreter &vm, ModuleLoc loc, Span<Var *> args,
 			       const StringMap<AssnArgData> &assn_args)
 {
 	Var *arg = args[1];
@@ -244,13 +244,13 @@ Var *feralCurlSetWriteCallback(Interpreter &vm, const ModuleLoc *loc, Span<Var *
 		vm.getTypeName(arg));
 		return nullptr;
 	}
-	if(writeCallback) decref(writeCallback);
-	incref(arg);
+	if(writeCallback) vm.decVarRef(writeCallback);
+	vm.incVarRef(arg);
 	writeCallback = as<VarFn>(arg);
 	return vm.getNil();
 }
 
-Var *feralCurlSetProgressCallback(Interpreter &vm, const ModuleLoc *loc, Span<Var *> args,
+Var *feralCurlSetProgressCallback(Interpreter &vm, ModuleLoc loc, Span<Var *> args,
 				  const StringMap<AssnArgData> &assn_args)
 {
 	Var *arg = args[1];
@@ -261,13 +261,13 @@ Var *feralCurlSetProgressCallback(Interpreter &vm, const ModuleLoc *loc, Span<Va
 			vm.getTypeName(arg));
 		return nullptr;
 	}
-	if(progressCallback) decref(progressCallback);
-	incref(arg);
+	if(progressCallback) vm.decVarRef(progressCallback);
+	vm.incVarRef(arg);
 	progressCallback = as<VarFn>(arg);
 	return vm.getNil();
 }
 
-Var *feralCurlSetProgressCallbackTick(Interpreter &vm, const ModuleLoc *loc, Span<Var *> args,
+Var *feralCurlSetProgressCallbackTick(Interpreter &vm, ModuleLoc loc, Span<Var *> args,
 				      const StringMap<AssnArgData> &assn_args)
 {
 	Var *arg = args[1];
@@ -278,7 +278,7 @@ Var *feralCurlSetProgressCallbackTick(Interpreter &vm, const ModuleLoc *loc, Spa
 			vm.getTypeName(arg));
 		return nullptr;
 	}
-	progressFuncIntervalTickMax = as<VarInt>(arg)->get();
+	progressFuncIntervalTickMax = as<VarInt>(arg)->getVal();
 	return vm.getNil();
 }
 

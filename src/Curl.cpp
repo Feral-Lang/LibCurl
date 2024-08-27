@@ -8,7 +8,7 @@ namespace fer
 /////////////////////////////////////////// Functions ////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////////
 
-Var *feralCurlEasyInit(Interpreter &vm, const ModuleLoc *loc, Span<Var *> args,
+Var *feralCurlEasyInit(Interpreter &vm, ModuleLoc loc, Span<Var *> args,
 		       const StringMap<AssnArgData> &assn_args)
 {
 	CURL *curl = curl_easy_init();
@@ -20,15 +20,15 @@ Var *feralCurlEasyInit(Interpreter &vm, const ModuleLoc *loc, Span<Var *> args,
 	return vm.makeVar<VarCurl>(loc, curl);
 }
 
-Var *feralCurlEasyPerform(Interpreter &vm, const ModuleLoc *loc, Span<Var *> args,
+Var *feralCurlEasyPerform(Interpreter &vm, ModuleLoc loc, Span<Var *> args,
 			  const StringMap<AssnArgData> &assn_args)
 {
-	CURL *curl = as<VarCurl>(args[0])->get();
-	curl_easy_setopt(curl, CURLOPT_XFERINFODATA, loc);
+	CURL *curl = as<VarCurl>(args[0])->getVal();
+	curl_easy_setopt(curl, CURLOPT_XFERINFODATA, &loc);
 	return vm.makeVar<VarInt>(loc, curl_easy_perform(curl));
 }
 
-Var *feralCurlEasyStrErrFromInt(Interpreter &vm, const ModuleLoc *loc, Span<Var *> args,
+Var *feralCurlEasyStrErrFromInt(Interpreter &vm, ModuleLoc loc, Span<Var *> args,
 				const StringMap<AssnArgData> &assn_args)
 {
 	if(!args[1]->is<VarInt>()) {
@@ -36,7 +36,7 @@ Var *feralCurlEasyStrErrFromInt(Interpreter &vm, const ModuleLoc *loc, Span<Var 
 			vm.getTypeName(args[1]));
 		return nullptr;
 	}
-	CURLcode code = (CURLcode)as<VarInt>(args[1])->get();
+	CURLcode code = (CURLcode)as<VarInt>(args[1])->getVal();
 	return vm.makeVar<VarStr>(loc, curl_easy_strerror(code));
 }
 
@@ -46,11 +46,11 @@ INIT_MODULE(Curl)
 
 	VarModule *mod = vm.getCurrModule();
 
-	mod->addNativeFn("newEasy", feralCurlEasyInit);
-	mod->addNativeFn("strerr", feralCurlEasyStrErrFromInt, 1);
-	mod->addNativeFn("setWriteCallback", feralCurlSetWriteCallback, 1);
-	mod->addNativeFn("setProgressCallback", feralCurlSetProgressCallback, 1);
-	mod->addNativeFn("setProgressCallbackTick", feralCurlSetProgressCallbackTick, 1);
+	mod->addNativeFn(vm, "newEasy", feralCurlEasyInit);
+	mod->addNativeFn(vm, "strerr", feralCurlEasyStrErrFromInt, 1);
+	mod->addNativeFn(vm, "setWriteCallback", feralCurlSetWriteCallback, 1);
+	mod->addNativeFn(vm, "setProgressCallback", feralCurlSetProgressCallback, 1);
+	mod->addNativeFn(vm, "setProgressCallbackTick", feralCurlSetProgressCallbackTick, 1);
 
 	// register the curl type (register_type)
 	vm.registerType<VarCurl>(loc, "Curl");
@@ -697,8 +697,8 @@ INIT_MODULE(Curl)
 
 DEINIT_MODULE(Curl)
 {
-	decref(writeCallback);
-	decref(progressCallback);
+	vm.decVarRef(writeCallback);
+	vm.decVarRef(progressCallback);
 	for(auto &e : hss) curl_slist_free_all(e);
 	curl_global_cleanup();
 }
