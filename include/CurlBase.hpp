@@ -24,6 +24,8 @@ size_t curlWriteCallback(char *ptr, size_t size, size_t nmemb, void *userdata);
 
 Var *feralCurlEasySetOptNative(Interpreter &vm, ModuleLoc loc, Span<Var *> args,
 			       const StringMap<AssnArgData> &assn_args);
+Var *feralCurlEasyGetInfoNative(Interpreter &vm, ModuleLoc loc, Span<Var *> args,
+				const StringMap<AssnArgData> &assn_args);
 
 // set some default values
 Var *feralCurlSetWriteCallback(Interpreter &vm, ModuleLoc loc, Span<Var *> args,

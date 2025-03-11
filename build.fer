@@ -8,5 +8,5 @@ libCurl.makeRequired().setTargetName('CURL::libcurl');
 let feralCurlType = project.addLibrary('CurlType', 'CurlType.cpp');
 feralCurlType.dependsOn(libCurl);
 
-let feralCurl = project.addLibrary('Curl', 'Curl.cpp', 'SetOpt.cpp', 'Mime.cpp'); # `src/` is not needed here
+let feralCurl = project.addLibrary('Curl', 'Curl.cpp', 'GetInfo.cpp', 'SetOpt.cpp', 'Mime.cpp'); # `src/` is not needed here
 feralCurl.dependsOn(libCurl, feralCurlType);

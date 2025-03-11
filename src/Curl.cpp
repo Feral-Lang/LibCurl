@@ -56,6 +56,7 @@ INIT_MODULE(Curl)
 	vm.registerType<VarCurl>(loc, "Curl");
 
 	vm.addNativeTypeFn<VarCurl>(loc, "newMime", feralCurlMimeNew, 0);
+	vm.addNativeTypeFn<VarCurl>(loc, "getInfoNative", feralCurlEasyGetInfoNative, 2);
 	vm.addNativeTypeFn<VarCurl>(loc, "setOptNative", feralCurlEasySetOptNative, 2);
 	vm.addNativeTypeFn<VarCurl>(loc, "perform", feralCurlEasyPerform, 0);
 
@@ -689,6 +690,102 @@ INIT_MODULE(Curl)
 
 	// TELNET OPTIONS
 	mod->addNativeVar("OPT_TELNETOPTIONS", vm.makeVar<VarInt>(loc, CURLOPT_TELNETOPTIONS));
+
+	// CURLINFO
+
+	mod->addNativeVar("INFO_EFFECTIVE_URL", vm.makeVar<VarInt>(loc, CURLINFO_EFFECTIVE_URL));
+	mod->addNativeVar("INFO_RESPONSE_CODE", vm.makeVar<VarInt>(loc, CURLINFO_RESPONSE_CODE));
+	mod->addNativeVar("INFO_TOTAL_TIME", vm.makeVar<VarInt>(loc, CURLINFO_TOTAL_TIME));
+	mod->addNativeVar("INFO_NAMELOOKUP_TIME",
+			  vm.makeVar<VarInt>(loc, CURLINFO_NAMELOOKUP_TIME));
+	mod->addNativeVar("INFO_CONNECT_TIME", vm.makeVar<VarInt>(loc, CURLINFO_CONNECT_TIME));
+	mod->addNativeVar("INFO_PRETRANSFER_TIME",
+			  vm.makeVar<VarInt>(loc, CURLINFO_PRETRANSFER_TIME));
+	mod->addNativeVar("INFO_SIZE_UPLOAD_T", vm.makeVar<VarInt>(loc, CURLINFO_SIZE_UPLOAD_T));
+	mod->addNativeVar("INFO_SIZE_DOWNLOAD_T",
+			  vm.makeVar<VarInt>(loc, CURLINFO_SIZE_DOWNLOAD_T));
+	mod->addNativeVar("INFO_SPEED_DOWNLOAD_T",
+			  vm.makeVar<VarInt>(loc, CURLINFO_SPEED_DOWNLOAD_T));
+	mod->addNativeVar("INFO_SPEED_UPLOAD_T", vm.makeVar<VarInt>(loc, CURLINFO_SPEED_UPLOAD_T));
+	mod->addNativeVar("INFO_HEADER_SIZE", vm.makeVar<VarInt>(loc, CURLINFO_HEADER_SIZE));
+	mod->addNativeVar("INFO_REQUEST_SIZE", vm.makeVar<VarInt>(loc, CURLINFO_REQUEST_SIZE));
+	mod->addNativeVar("INFO_SSL_VERIFYRESULT",
+			  vm.makeVar<VarInt>(loc, CURLINFO_SSL_VERIFYRESULT));
+	mod->addNativeVar("INFO_FILETIME", vm.makeVar<VarInt>(loc, CURLINFO_FILETIME));
+	mod->addNativeVar("INFO_FILETIME_T", vm.makeVar<VarInt>(loc, CURLINFO_FILETIME_T));
+	mod->addNativeVar("INFO_CONTENT_LENGTH_DOWNLOAD_T",
+			  vm.makeVar<VarInt>(loc, CURLINFO_CONTENT_LENGTH_DOWNLOAD_T));
+	mod->addNativeVar("INFO_CONTENT_LENGTH_UPLOAD_T",
+			  vm.makeVar<VarInt>(loc, CURLINFO_CONTENT_LENGTH_UPLOAD_T));
+	mod->addNativeVar("INFO_STARTTRANSFER_TIME",
+			  vm.makeVar<VarInt>(loc, CURLINFO_STARTTRANSFER_TIME));
+	mod->addNativeVar("INFO_CONTENT_TYPE", vm.makeVar<VarInt>(loc, CURLINFO_CONTENT_TYPE));
+	mod->addNativeVar("INFO_REDIRECT_TIME", vm.makeVar<VarInt>(loc, CURLINFO_REDIRECT_TIME));
+	mod->addNativeVar("INFO_REDIRECT_COUNT", vm.makeVar<VarInt>(loc, CURLINFO_REDIRECT_COUNT));
+	mod->addNativeVar("INFO_PRIVATE", vm.makeVar<VarInt>(loc, CURLINFO_PRIVATE));
+	mod->addNativeVar("INFO_HTTP_CONNECTCODE",
+			  vm.makeVar<VarInt>(loc, CURLINFO_HTTP_CONNECTCODE));
+	mod->addNativeVar("INFO_HTTPAUTH_AVAIL", vm.makeVar<VarInt>(loc, CURLINFO_HTTPAUTH_AVAIL));
+	mod->addNativeVar("INFO_PROXYAUTH_AVAIL",
+			  vm.makeVar<VarInt>(loc, CURLINFO_PROXYAUTH_AVAIL));
+	mod->addNativeVar("INFO_OS_ERRNO", vm.makeVar<VarInt>(loc, CURLINFO_OS_ERRNO));
+	mod->addNativeVar("INFO_NUM_CONNECTS", vm.makeVar<VarInt>(loc, CURLINFO_NUM_CONNECTS));
+	mod->addNativeVar("INFO_SSL_ENGINES", vm.makeVar<VarInt>(loc, CURLINFO_SSL_ENGINES));
+	mod->addNativeVar("INFO_COOKIELIST", vm.makeVar<VarInt>(loc, CURLINFO_COOKIELIST));
+	mod->addNativeVar("INFO_FTP_ENTRY_PATH", vm.makeVar<VarInt>(loc, CURLINFO_FTP_ENTRY_PATH));
+	mod->addNativeVar("INFO_REDIRECT_URL", vm.makeVar<VarInt>(loc, CURLINFO_REDIRECT_URL));
+	mod->addNativeVar("INFO_PRIMARY_IP", vm.makeVar<VarInt>(loc, CURLINFO_PRIMARY_IP));
+	mod->addNativeVar("INFO_APPCONNECT_TIME",
+			  vm.makeVar<VarInt>(loc, CURLINFO_APPCONNECT_TIME));
+	mod->addNativeVar("INFO_CERTINFO", vm.makeVar<VarInt>(loc, CURLINFO_CERTINFO));
+	mod->addNativeVar("INFO_CONDITION_UNMET",
+			  vm.makeVar<VarInt>(loc, CURLINFO_CONDITION_UNMET));
+	mod->addNativeVar("INFO_RTSP_SESSION_ID",
+			  vm.makeVar<VarInt>(loc, CURLINFO_RTSP_SESSION_ID));
+	mod->addNativeVar("INFO_RTSP_CLIENT_CSEQ",
+			  vm.makeVar<VarInt>(loc, CURLINFO_RTSP_CLIENT_CSEQ));
+	mod->addNativeVar("INFO_RTSP_SERVER_CSEQ",
+			  vm.makeVar<VarInt>(loc, CURLINFO_RTSP_SERVER_CSEQ));
+	mod->addNativeVar("INFO_RTSP_CSEQ_RECV", vm.makeVar<VarInt>(loc, CURLINFO_RTSP_CSEQ_RECV));
+	mod->addNativeVar("INFO_PRIMARY_PORT", vm.makeVar<VarInt>(loc, CURLINFO_PRIMARY_PORT));
+	mod->addNativeVar("INFO_LOCAL_IP", vm.makeVar<VarInt>(loc, CURLINFO_LOCAL_IP));
+	mod->addNativeVar("INFO_LOCAL_PORT ", vm.makeVar<VarInt>(loc, CURLINFO_LOCAL_PORT));
+	mod->addNativeVar("INFO_ACTIVESOCKET", vm.makeVar<VarInt>(loc, CURLINFO_ACTIVESOCKET));
+	mod->addNativeVar("INFO_TLS_SSL_PTR", vm.makeVar<VarInt>(loc, CURLINFO_TLS_SSL_PTR));
+	mod->addNativeVar("INFO_HTTP_VERSION", vm.makeVar<VarInt>(loc, CURLINFO_HTTP_VERSION));
+	mod->addNativeVar("INFO_PROXY_SSL_VERIFYRESULT ",
+			  vm.makeVar<VarInt>(loc, CURLINFO_PROXY_SSL_VERIFYRESULT));
+	mod->addNativeVar("INFO_SCHEME", vm.makeVar<VarInt>(loc, CURLINFO_SCHEME));
+	mod->addNativeVar("INFO_TOTAL_TIME_T", vm.makeVar<VarInt>(loc, CURLINFO_TOTAL_TIME_T));
+	mod->addNativeVar("INFO_NAMELOOKUP_TIME_T",
+			  vm.makeVar<VarInt>(loc, CURLINFO_NAMELOOKUP_TIME_T));
+	mod->addNativeVar("INFO_CONNECT_TIME_T", vm.makeVar<VarInt>(loc, CURLINFO_CONNECT_TIME_T));
+	mod->addNativeVar("INFO_PRETRANSFER_TIME_T",
+			  vm.makeVar<VarInt>(loc, CURLINFO_PRETRANSFER_TIME_T));
+	mod->addNativeVar("INFO_STARTTRANSFER_TIME_T",
+			  vm.makeVar<VarInt>(loc, CURLINFO_STARTTRANSFER_TIME_T));
+	mod->addNativeVar("INFO_REDIRECT_TIME_T",
+			  vm.makeVar<VarInt>(loc, CURLINFO_REDIRECT_TIME_T));
+	mod->addNativeVar("INFO_APPCONNECT_TIME_T",
+			  vm.makeVar<VarInt>(loc, CURLINFO_APPCONNECT_TIME_T));
+	mod->addNativeVar("INFO_RETRY_AFTER", vm.makeVar<VarInt>(loc, CURLINFO_RETRY_AFTER));
+	mod->addNativeVar("INFO_EFFECTIVE_METHOD",
+			  vm.makeVar<VarInt>(loc, CURLINFO_EFFECTIVE_METHOD));
+	mod->addNativeVar("INFO_PROXY_ERROR", vm.makeVar<VarInt>(loc, CURLINFO_PROXY_ERROR));
+	mod->addNativeVar("INFO_REFERER", vm.makeVar<VarInt>(loc, CURLINFO_REFERER));
+	mod->addNativeVar("INFO_CAINFO", vm.makeVar<VarInt>(loc, CURLINFO_CAINFO));
+	mod->addNativeVar("INFO_CAPATH", vm.makeVar<VarInt>(loc, CURLINFO_CAPATH));
+	mod->addNativeVar("INFO_XFER_ID", vm.makeVar<VarInt>(loc, CURLINFO_XFER_ID));
+	mod->addNativeVar("INFO_CONN_ID", vm.makeVar<VarInt>(loc, CURLINFO_CONN_ID));
+	mod->addNativeVar("INFO_QUEUE_TIME_T", vm.makeVar<VarInt>(loc, CURLINFO_QUEUE_TIME_T));
+	mod->addNativeVar("INFO_USED_PROXY", vm.makeVar<VarInt>(loc, CURLINFO_USED_PROXY));
+	mod->addNativeVar("INFO_POSTTRANSFER_TIME_T",
+			  vm.makeVar<VarInt>(loc, CURLINFO_POSTTRANSFER_TIME_T));
+	mod->addNativeVar("INFO_EARLYDATA_SENT_T",
+			  vm.makeVar<VarInt>(loc, CURLINFO_EARLYDATA_SENT_T));
+	mod->addNativeVar("INFO_HTTPAUTH_USED", vm.makeVar<VarInt>(loc, CURLINFO_HTTPAUTH_USED));
+	mod->addNativeVar("INFO_PROXYAUTH_USED", vm.makeVar<VarInt>(loc, CURLINFO_PROXYAUTH_USED));
+	mod->addNativeVar("INFO_LASTONE", vm.makeVar<VarInt>(loc, CURLINFO_LASTONE));
 
 	curl_global_init(CURL_GLOBAL_ALL);
 
