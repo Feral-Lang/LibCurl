@@ -91,6 +91,7 @@ Var *feralCurlEasySetOptNative(Interpreter &vm, ModuleLoc loc, Span<Var *> args,
 	int res = CURLE_OK;
 	// manually handle each of the options and work accordingly
 	switch(opt) {
+	case CURLOPT_CONNECT_ONLY:   // fallthrough
 	case CURLOPT_FOLLOWLOCATION: // fallthrough
 	case CURLOPT_NOPROGRESS: {
 		if(!arg->is<VarInt>()) {
