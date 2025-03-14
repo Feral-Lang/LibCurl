@@ -2,8 +2,8 @@ let builder = import('pkg/builder');
 
 let project = builder.get();
 
-let libCurl = project.addSystemLibrary('CURL');
-libCurl.makeRequired().setTargetName('CURL::libcurl');
+let libCurl = project.findPackage('CURL');
+libCurl.setTargetLinkName('CURL::libcurl');
 
 let feralCurlType = project.addLibrary('CurlType', 'CurlType.cpp');
 feralCurlType.dependsOn(libCurl);
