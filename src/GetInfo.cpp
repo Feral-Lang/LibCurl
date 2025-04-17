@@ -8,7 +8,7 @@ namespace fer
 /////////////////////////////////////// CURL functions ////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-Var *feralCurlEasyGetInfoNative(Interpreter &vm, ModuleLoc loc, Span<Var *> args,
+Var *feralCurlEasyGetInfoNative(VirtualMachine &vm, ModuleLoc loc, Span<Var *> args,
 				const StringMap<AssnArgData> &assn_args)
 {
 	CURL *curl = as<VarCurl>(args[0])->getVal();

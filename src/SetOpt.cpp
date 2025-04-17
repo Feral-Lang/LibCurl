@@ -4,7 +4,7 @@
 namespace fer
 {
 
-Interpreter *cbVM = nullptr;
+VirtualMachine *cbVM = nullptr;
 
 Var *progressCallback = nullptr;
 Var *writeCallback    = nullptr;
@@ -76,7 +76,7 @@ size_t curlWriteCallback(char *ptr, size_t size, size_t nmemb, void *userdata)
 /////////////////////////////////////// CURL functions ////////////////////////////////////////////
 ///////////////////////////////////////////////////////////////////////////////////////////////////
 
-Var *feralCurlEasySetOptNative(Interpreter &vm, ModuleLoc loc, Span<Var *> args,
+Var *feralCurlEasySetOptNative(VirtualMachine &vm, ModuleLoc loc, Span<Var *> args,
 			       const StringMap<AssnArgData> &assn_args)
 {
 	CURL *curl = as<VarCurl>(args[0])->getVal();
@@ -235,7 +235,7 @@ Var *feralCurlEasySetOptNative(Interpreter &vm, ModuleLoc loc, Span<Var *> args,
 	return vm.makeVar<VarInt>(loc, res);
 }
 
-Var *feralCurlSetWriteCallback(Interpreter &vm, ModuleLoc loc, Span<Var *> args,
+Var *feralCurlSetWriteCallback(VirtualMachine &vm, ModuleLoc loc, Span<Var *> args,
 			       const StringMap<AssnArgData> &assn_args)
 {
 	Var *arg = args[1];
@@ -251,7 +251,7 @@ Var *feralCurlSetWriteCallback(Interpreter &vm, ModuleLoc loc, Span<Var *> args,
 	return vm.getNil();
 }
 
-Var *feralCurlSetProgressCallback(Interpreter &vm, ModuleLoc loc, Span<Var *> args,
+Var *feralCurlSetProgressCallback(VirtualMachine &vm, ModuleLoc loc, Span<Var *> args,
 				  const StringMap<AssnArgData> &assn_args)
 {
 	Var *arg = args[1];
@@ -268,7 +268,7 @@ Var *feralCurlSetProgressCallback(Interpreter &vm, ModuleLoc loc, Span<Var *> ar
 	return vm.getNil();
 }
 
-Var *feralCurlSetProgressCallbackTick(Interpreter &vm, ModuleLoc loc, Span<Var *> args,
+Var *feralCurlSetProgressCallbackTick(VirtualMachine &vm, ModuleLoc loc, Span<Var *> args,
 				      const StringMap<AssnArgData> &assn_args)
 {
 	Var *arg = args[1];

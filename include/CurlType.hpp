@@ -15,8 +15,8 @@ class VarCurl : public Var
 	CURL *val;
 	bool owner;
 
-	Var *onCopy(Interpreter &vm, ModuleLoc loc) override;
-	void onSet(Interpreter &vm, Var *from) override;
+	Var *onCopy(MemoryManager &mem, ModuleLoc loc) override;
+	void onSet(MemoryManager &mem, Var *from) override;
 
 public:
 	VarCurl(ModuleLoc loc, CURL *const val, bool owner = true);
@@ -29,8 +29,8 @@ class VarCurlMimePart : public Var
 {
 	curl_mimepart *val;
 
-	Var *onCopy(Interpreter &vm, ModuleLoc loc) override;
-	void onSet(Interpreter &vm, Var *from) override;
+	Var *onCopy(MemoryManager &mem, ModuleLoc loc) override;
+	void onSet(MemoryManager &mem, Var *from) override;
 
 public:
 	VarCurlMimePart(ModuleLoc loc, curl_mimepart *const val);
@@ -44,8 +44,8 @@ class VarCurlMime : public Var
 	curl_mime *val;
 	bool owner;
 
-	Var *onCopy(Interpreter &vm, ModuleLoc loc) override;
-	void onSet(Interpreter &vm, Var *from) override;
+	Var *onCopy(MemoryManager &mem, ModuleLoc loc) override;
+	void onSet(MemoryManager &mem, Var *from) override;
 
 public:
 	VarCurlMime(ModuleLoc loc, curl_mime *const val, bool owner = true);

@@ -8,7 +8,7 @@ namespace fer
 /////////////////////////////////////////// Functions ////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////////
 
-Var *feralCurlEasyInit(Interpreter &vm, ModuleLoc loc, Span<Var *> args,
+Var *feralCurlEasyInit(VirtualMachine &vm, ModuleLoc loc, Span<Var *> args,
 		       const StringMap<AssnArgData> &assn_args)
 {
 	CURL *curl = curl_easy_init();
@@ -20,7 +20,7 @@ Var *feralCurlEasyInit(Interpreter &vm, ModuleLoc loc, Span<Var *> args,
 	return vm.makeVar<VarCurl>(loc, curl);
 }
 
-Var *feralCurlEasyPerform(Interpreter &vm, ModuleLoc loc, Span<Var *> args,
+Var *feralCurlEasyPerform(VirtualMachine &vm, ModuleLoc loc, Span<Var *> args,
 			  const StringMap<AssnArgData> &assn_args)
 {
 	CURL *curl = as<VarCurl>(args[0])->getVal();
@@ -28,7 +28,7 @@ Var *feralCurlEasyPerform(Interpreter &vm, ModuleLoc loc, Span<Var *> args,
 	return vm.makeVar<VarInt>(loc, curl_easy_perform(curl));
 }
 
-Var *feralCurlEasyStrErrFromInt(Interpreter &vm, ModuleLoc loc, Span<Var *> args,
+Var *feralCurlEasyStrErrFromInt(VirtualMachine &vm, ModuleLoc loc, Span<Var *> args,
 				const StringMap<AssnArgData> &assn_args)
 {
 	if(!args[1]->is<VarInt>()) {
@@ -794,8 +794,8 @@ INIT_MODULE(Curl)
 
 DEINIT_MODULE(Curl)
 {
-	vm.decVarRef(writeCallback);
-	vm.decVarRef(progressCallback);
+	ip.decVarRef(writeCallback);
+	ip.decVarRef(progressCallback);
 	for(auto &e : hss) curl_slist_free_all(e);
 	curl_global_cleanup();
 }

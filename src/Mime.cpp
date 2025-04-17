@@ -4,13 +4,13 @@
 namespace fer
 {
 
-Var *feralCurlMimeNew(Interpreter &vm, ModuleLoc loc, Span<Var *> args,
+Var *feralCurlMimeNew(VirtualMachine &vm, ModuleLoc loc, Span<Var *> args,
 		      const StringMap<AssnArgData> &assn_args)
 {
 	return vm.makeVar<VarCurlMime>(loc, curl_mime_init(as<VarCurl>(args[0])->getVal()));
 }
 
-Var *feralCurlMimePartAddData(Interpreter &vm, ModuleLoc loc, Span<Var *> args,
+Var *feralCurlMimePartAddData(VirtualMachine &vm, ModuleLoc loc, Span<Var *> args,
 			      const StringMap<AssnArgData> &assn_args)
 {
 	if(!args[1]->is<VarStr>()) {
@@ -28,7 +28,7 @@ Var *feralCurlMimePartAddData(Interpreter &vm, ModuleLoc loc, Span<Var *> args,
 	return res;
 }
 
-Var *feralCurlMimePartAddFile(Interpreter &vm, ModuleLoc loc, Span<Var *> args,
+Var *feralCurlMimePartAddFile(VirtualMachine &vm, ModuleLoc loc, Span<Var *> args,
 			      const StringMap<AssnArgData> &assn_args)
 {
 	if(!args[1]->is<VarStr>()) {
