@@ -7,7 +7,7 @@ namespace fer
 {
 
 // for use in callbacks
-extern Interpreter *cbVM;
+extern VirtualMachine *cbVM;
 
 extern Var *progressCallback;
 extern Var *writeCallback;
@@ -22,26 +22,26 @@ int curlProgressCallback(void *ptr, curl_off_t to_download, curl_off_t downloade
 			 curl_off_t to_upload, curl_off_t uploaded);
 size_t curlWriteCallback(char *ptr, size_t size, size_t nmemb, void *userdata);
 
-Var *feralCurlEasySetOptNative(Interpreter &vm, ModuleLoc loc, Span<Var *> args,
+Var *feralCurlEasySetOptNative(VirtualMachine &vm, ModuleLoc loc, Span<Var *> args,
 			       const StringMap<AssnArgData> &assn_args);
-Var *feralCurlEasyGetInfoNative(Interpreter &vm, ModuleLoc loc, Span<Var *> args,
+Var *feralCurlEasyGetInfoNative(VirtualMachine &vm, ModuleLoc loc, Span<Var *> args,
 				const StringMap<AssnArgData> &assn_args);
 
 // set some default values
-Var *feralCurlSetWriteCallback(Interpreter &vm, ModuleLoc loc, Span<Var *> args,
+Var *feralCurlSetWriteCallback(VirtualMachine &vm, ModuleLoc loc, Span<Var *> args,
 			       const StringMap<AssnArgData> &assn_args);
-Var *feralCurlSetProgressCallback(Interpreter &vm, ModuleLoc loc, Span<Var *> args,
+Var *feralCurlSetProgressCallback(VirtualMachine &vm, ModuleLoc loc, Span<Var *> args,
 				  const StringMap<AssnArgData> &assn_args);
-Var *feralCurlSetProgressCallbackTick(Interpreter &vm, ModuleLoc loc, Span<Var *> args,
+Var *feralCurlSetProgressCallbackTick(VirtualMachine &vm, ModuleLoc loc, Span<Var *> args,
 				      const StringMap<AssnArgData> &assn_args);
 
 // Mime Functions
 
-Var *feralCurlMimeNew(Interpreter &vm, ModuleLoc loc, Span<Var *> args,
+Var *feralCurlMimeNew(VirtualMachine &vm, ModuleLoc loc, Span<Var *> args,
 		      const StringMap<AssnArgData> &assn_args);
-Var *feralCurlMimePartAddData(Interpreter &vm, ModuleLoc loc, Span<Var *> args,
+Var *feralCurlMimePartAddData(VirtualMachine &vm, ModuleLoc loc, Span<Var *> args,
 			      const StringMap<AssnArgData> &assn_args);
-Var *feralCurlMimePartAddFile(Interpreter &vm, ModuleLoc loc, Span<Var *> args,
+Var *feralCurlMimePartAddFile(VirtualMachine &vm, ModuleLoc loc, Span<Var *> args,
 			      const StringMap<AssnArgData> &assn_args);
 
 } // namespace fer
