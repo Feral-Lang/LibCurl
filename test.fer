@@ -5,6 +5,11 @@ let curl = import('curl/curl');
 
 let url = 'http://212.183.159.230/10MB.zip';
 let out = '10MB.zip';
+
+let writeCB = fn(data, file) {
+	io.fprint(file, data);
+};
+
 # scoped so that outFile is closed before attempting to remove it
 # otherwise, an error is produced on windows
 {
@@ -14,12 +19,12 @@ let out = '10MB.zip';
 	c.setOpt(curl.OPT_URL, url);
 	c.setOpt(curl.OPT_FOLLOWLOCATION, 1);
 	c.setOpt(curl.OPT_NOPROGRESS, 0);
-	c.setOpt(curl.OPT_XFERINFOFUNCTION, curl.progressCB);
-	c.setOpt(curl.OPT_WRITEDATA, outFile);
+	c.setOpt(curl.OPT_XFERINFOFUNCTION, curl.defaultProgressCB);
+	c.setOpt(curl.OPT_WRITEFUNCTION, writeCB, outFile);
 	let result = c.perform();
 	io.println();
 	if result != curl.E_OK {
-		io.println('Failed to download file \'', url, '\' to \'', out, '\'');
+		io.println('Failed to download file \'', url, '\' to \'', out, '\': ', curl.strerr(result));
 		feral.exit(result);
 	}
 }

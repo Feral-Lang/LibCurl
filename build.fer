@@ -5,8 +5,5 @@ let project = builder.get();
 let libCurl = project.findPackage('CURL');
 libCurl.setTargetLinkName('CURL::libcurl');
 
-let feralCurlType = project.addLibrary('CurlType', 'CurlType.cpp');
-feralCurlType.dependsOn(libCurl);
-
-let feralCurl = project.addLibrary('Curl', 'Curl.cpp', 'GetInfo.cpp', 'SetOpt.cpp', 'Mime.cpp'); # `src/` is not needed here
-feralCurl.dependsOn(libCurl, feralCurlType);
+let feralCurl = project.addLibrary('Curl', 'Curl.cpp'); # `src/` is not needed here
+feralCurl.dependsOn(libCurl);
