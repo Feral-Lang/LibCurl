@@ -1,8 +1,167 @@
-#include "CurlBase.hpp"
-#include "CurlType.hpp"
+#include "Curl.hpp"
 
 namespace fer
 {
+
+constexpr size_t CURL_DEFAULT_PROGRESS_INTERVAL_TICK_MAX = 10;
+
+void setEnumVars(VirtualMachine &vm, VarModule *mod, ModuleLoc loc);
+
+//////////////////////////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////// Callbacks ////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////
+
+int curlProgressCallback(void *ptr, curl_off_t dlTotal, curl_off_t dlDone, curl_off_t ulTotal,
+			 curl_off_t ulDone)
+{
+	// ensure that the file to be downloaded is not empty
+	// because that would cause a division by zero error later on
+	if(dlTotal <= 0 && ulTotal <= 0) return 0;
+
+	CurlCallbackData &cbdata = *(CurlCallbackData *)ptr;
+
+	if(!cbdata.curl->getProgressCB()) return 0;
+
+	size_t &intervalTick = cbdata.curl->getProgIntervalTick();
+	if(intervalTick < cbdata.curl->getProgIntervalTickMax()) {
+		++intervalTick;
+		return 0;
+	}
+	intervalTick = 0;
+
+	VarVec *argsVar = cbdata.curl->getProgressCBArgs();
+	as<VarFlt>(argsVar->at(1))->setVal(dlTotal);
+	as<VarFlt>(argsVar->at(2))->setVal(dlDone);
+	as<VarFlt>(argsVar->at(3))->setVal(ulTotal);
+	as<VarFlt>(argsVar->at(4))->setVal(ulDone);
+	if(!cbdata.curl->getProgressCB()->call(cbdata.vm, cbdata.loc, argsVar->getVal(), {})) {
+		cbdata.vm.warn(cbdata.loc, "failed to call progress callback, check error above");
+		return 1;
+	}
+	return 0;
+}
+
+size_t curlWriteCallback(char *ptr, size_t size, size_t nmemb, void *userdata)
+{
+	CurlCallbackData &cbdata = *(CurlCallbackData *)userdata;
+	if(!cbdata.curl->getWriteCB()) return size * nmemb; // returning zero is an error
+
+	VarVec *argsVar = cbdata.curl->getWriteCBArgs();
+	as<VarStr>(argsVar->at(1))->setVal(StringRef(ptr, size * nmemb));
+	if(!cbdata.curl->getWriteCB()->call(cbdata.vm, cbdata.loc, argsVar->getVal(), {})) {
+		cbdata.vm.warn(cbdata.loc, "failed to call write callback, check error above");
+		return 0;
+	}
+	return size * nmemb;
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////////////
+/////////////////////////////////////////// VarCurl //////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////
+
+VarCurl::VarCurl(ModuleLoc loc, CURL *val)
+	: Var(loc, false, false), val(val), progCB(nullptr), writeCB(nullptr), progCBArgs(nullptr),
+	  writeCBArgs(nullptr), progIntervalTick(0),
+	  progIntervalTickMax(CURL_DEFAULT_PROGRESS_INTERVAL_TICK_MAX)
+{}
+VarCurl::~VarCurl()
+{
+	clearMimeData();
+	curl_easy_cleanup(val);
+}
+
+void VarCurl::onCreate(MemoryManager &mem)
+{
+	progCBArgs = Var::makeVarWithRef<VarVec>(mem, getLoc(), 5, true);
+	progCBArgs->push(nullptr);
+	progCBArgs->push(Var::makeVarWithRef<VarFlt>(mem, getLoc(), 0.0));
+	progCBArgs->push(Var::makeVarWithRef<VarFlt>(mem, getLoc(), 0.0));
+	progCBArgs->push(Var::makeVarWithRef<VarFlt>(mem, getLoc(), 0.0));
+	progCBArgs->push(Var::makeVarWithRef<VarFlt>(mem, getLoc(), 0.0));
+
+	writeCBArgs = Var::makeVarWithRef<VarVec>(mem, ModuleLoc(), 2, true);
+	writeCBArgs->push(nullptr);
+	writeCBArgs->push(Var::makeVarWithRef<VarStr>(mem, getLoc(), ""));
+}
+void VarCurl::onDestroy(MemoryManager &mem)
+{
+	Var::decVarRef(mem, writeCBArgs);
+	Var::decVarRef(mem, progCBArgs);
+	setProgressCB(mem, nullptr, {});
+	setWriteCB(mem, nullptr, {});
+}
+
+void VarCurl::setProgressCB(MemoryManager &mem, VarFn *_progCB, Span<Var *> args)
+{
+	if(progCB) Var::decVarRef(mem, progCB);
+	progCB = _progCB;
+	if(progCB) Var::incVarRef(progCB);
+	if(!progCBArgs) return;
+	while(progCBArgs->size() > 5) {
+		Var::decVarRef(mem, progCBArgs->back());
+		progCBArgs->pop();
+	}
+	for(auto &arg : args) {
+		Var::incVarRef(arg);
+		progCBArgs->push(arg);
+	}
+}
+void VarCurl::setWriteCB(MemoryManager &mem, VarFn *_writeCB, Span<Var *> args)
+{
+	if(writeCB) Var::decVarRef(mem, writeCB);
+	writeCB = _writeCB;
+	if(writeCB) Var::incVarRef(writeCB);
+	if(!writeCBArgs) return;
+	while(writeCBArgs->size() > 5) {
+		Var::decVarRef(mem, writeCBArgs->back());
+		writeCBArgs->pop();
+	}
+	for(auto &arg : args) {
+		Var::incVarRef(arg);
+		writeCBArgs->push(arg);
+	}
+}
+
+curl_mime *VarCurl::createMime(VirtualMachine &vm, ModuleLoc loc, Var *data)
+{
+	if(data->is<VarMap>() && as<VarMap>(data)->getVal().empty()) return nullptr;
+
+	mimelist.push_front(curl_mime_init(val));
+	curl_mime *mime = mimelist.front();
+	if(data->is<VarStr>()) {
+		curl_mimepart *part = curl_mime_addpart(mime);
+		curl_mime_filedata(part, as<VarStr>(data)->getVal().c_str());
+		curl_mime_filename(part, as<VarStr>(data)->getVal().c_str());
+	} else {
+		VarMap *map = as<VarMap>(data);
+		for(auto &item : map->getVal()) {
+			Var *v = nullptr;
+			Array<Var *, 1> tmp{item.second};
+			if(!vm.callVarAndExpect<VarStr>(loc, "str", v, tmp, {})) {
+				curl_mime_free(mime);
+				mimelist.pop_front();
+				return nullptr;
+			}
+			const String &str   = as<VarStr>(v)->getVal();
+			curl_mimepart *part = curl_mime_addpart(mime);
+			curl_mime_name(part, item.first.c_str());
+			curl_mime_data(part, str.c_str(), str.size());
+			vm.decVarRef(v);
+		}
+	}
+	return mime;
+}
+void VarCurl::clearMimeData()
+{
+	while(!mimelist.empty()) {
+		curl_mime_free(mimelist.front());
+		mimelist.pop_front();
+	}
+}
+
+CurlCallbackData::CurlCallbackData(ModuleLoc loc, VirtualMachine &vm, VarCurl *curl)
+	: loc(loc), vm(vm), curl(curl)
+{}
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////// Functions ////////////////////////////////////////////
@@ -16,7 +175,8 @@ Var *feralCurlEasyInit(VirtualMachine &vm, ModuleLoc loc, Span<Var *> args,
 		vm.fail(loc, "failed to run curl_easy_init()");
 		return nullptr;
 	}
-
+	curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, curlProgressCallback);
+	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curlWriteCallback);
 	return vm.makeVar<VarCurl>(loc, curl);
 }
 
@@ -24,7 +184,9 @@ Var *feralCurlEasyPerform(VirtualMachine &vm, ModuleLoc loc, Span<Var *> args,
 			  const StringMap<AssnArgData> &assn_args)
 {
 	CURL *curl = as<VarCurl>(args[0])->getVal();
-	curl_easy_setopt(curl, CURLOPT_XFERINFODATA, &loc);
+	CurlCallbackData cbdata(loc, vm, as<VarCurl>(args[0]));
+	curl_easy_setopt(curl, CURLOPT_XFERINFODATA, &cbdata);
+	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &cbdata);
 	return vm.makeVar<VarInt>(loc, curl_easy_perform(curl));
 }
 
@@ -40,30 +202,199 @@ Var *feralCurlEasyStrErrFromInt(VirtualMachine &vm, ModuleLoc loc, Span<Var *> a
 	return vm.makeVar<VarStr>(loc, curl_easy_strerror(code));
 }
 
+Var *feralCurlSetProgressCBTick(VirtualMachine &vm, ModuleLoc loc, Span<Var *> args,
+				const StringMap<AssnArgData> &assn_args)
+{
+	Var *arg = args[1];
+	if(!arg->is<VarInt>()) {
+		vm.fail(loc,
+			"expected an integer as parameter for setting progress callback"
+			"tick interval, found: ",
+			vm.getTypeName(arg));
+		return nullptr;
+	}
+	VarCurl *curl = as<VarCurl>(args[0]);
+	curl->setProgIntervalTickMax(as<VarInt>(arg)->getVal());
+	return vm.getNil();
+}
+
+Var *feralCurlEasyGetInfoNative(VirtualMachine &vm, ModuleLoc loc, Span<Var *> args,
+				const StringMap<AssnArgData> &assn_args)
+{
+	CURL *curl = as<VarCurl>(args[0])->getVal();
+	if(!args[1]->is<VarInt>()) {
+		vm.fail(loc, "expected an integer as parameter for option type, found: ",
+			vm.getTypeName(args[1]));
+		return nullptr;
+	}
+	int opt	 = as<VarInt>(args[1])->getVal();
+	Var *arg = args[2];
+
+	int res = CURLE_OK;
+	// manually handle each of the options and work accordingly
+	switch(opt) {
+	case CURLINFO_ACTIVESOCKET: {
+		if(!arg->is<VarInt>()) {
+			vm.fail(loc, "expected an integer as parameter for this option, found: ",
+				vm.getTypeName(arg));
+			return nullptr;
+		}
+		long sockfd;
+		res = curl_easy_getinfo(curl, (CURLINFO)opt, &sockfd);
+		as<VarInt>(arg)->setVal(sockfd);
+		break;
+	}
+	default: {
+		vm.fail(loc, "operation is not yet implemented");
+		return nullptr;
+	}
+	}
+	return vm.makeVar<VarInt>(loc, res);
+}
+
+Var *feralCurlEasySetOptNative(VirtualMachine &vm, ModuleLoc loc, Span<Var *> args,
+			       const StringMap<AssnArgData> &assn_args)
+{
+	VarCurl *varCurl = as<VarCurl>(args[0]);
+	CURL *curl	 = varCurl->getVal();
+	if(!args[1]->is<VarInt>()) {
+		vm.fail(loc,
+			"expected an integer (CURL_OPT_*) as parameter for option type, found: ",
+			vm.getTypeName(args[1]));
+		return nullptr;
+	}
+	int opt	 = as<VarInt>(args[1])->getVal();
+	Var *arg = args[2];
+
+	int res = CURLE_OK;
+	// manually handle each of the options and work accordingly
+	switch(opt) {
+	case CURLOPT_CONNECT_ONLY:   // fallthrough
+	case CURLOPT_FOLLOWLOCATION: // fallthrough
+	case CURLOPT_NOPROGRESS: {
+		if(!arg->is<VarInt>()) {
+			vm.fail(loc, "expected an integer as parameter for this option, found: ",
+				vm.getTypeName(arg));
+			return nullptr;
+		}
+		res = curl_easy_setopt(curl, (CURLoption)opt, as<VarInt>(arg)->getVal());
+		break;
+	}
+	case CURLOPT_URL:
+	case CURLOPT_USERAGENT:
+	case CURLOPT_CUSTOMREQUEST:
+	case CURLOPT_POSTFIELDS: {
+		if(!arg->is<VarStr>()) {
+			vm.fail(loc, "expected a string as parameter for this option, found: ",
+				vm.getTypeName(arg));
+			return nullptr;
+		}
+		// tmp shenanigans because curl does not copy the string for POSTFIELDS in an
+		// internal buffer
+		static String tmp;
+		tmp.clear();
+		tmp = as<VarStr>(arg)->getVal();
+		res = curl_easy_setopt(curl, (CURLoption)opt, tmp.c_str());
+		break;
+	}
+	case CURLOPT_MIMEPOST: {
+		if(!arg->is<VarMap>()) {
+			vm.fail(loc,
+				"expected a map of name-data pairs "
+				"as parameter for this option, found: ",
+				vm.getTypeName(arg));
+			return nullptr;
+		}
+		curl_mime *mime = varCurl->createMime(vm, loc, as<VarMap>(arg));
+		if(!mime) {
+			vm.warn(loc,
+				"failed to create mime from the given map (possibly empty map)");
+			return nullptr;
+		}
+		res = curl_easy_setopt(curl, (CURLoption)opt, mime);
+		break;
+	}
+	case CURLOPT_XFERINFOFUNCTION: {
+		if(arg->is<VarNil>()) {
+			varCurl->setProgressCB(vm.getMemoryManager(), nullptr, {});
+			break;
+		}
+		if(!arg->is<VarFn>()) {
+			vm.fail(loc, "expected a function as parameter for this option, found: ",
+				vm.getTypeName(arg));
+			return nullptr;
+		}
+		VarFn *f = as<VarFn>(arg);
+		if(f->getParams().size() + f->getAssnParam().size() < 4) {
+			vm.fail(loc, "expected function to have at least 4",
+				" parameters for this option, found: ",
+				f->getParams().size() + f->getAssnParam().size());
+			return nullptr;
+		}
+		Span<Var *> cbArgs{args.begin() + 3, args.end()};
+		varCurl->setProgressCB(vm.getMemoryManager(), f, cbArgs);
+		break;
+	}
+	case CURLOPT_WRITEFUNCTION: {
+		if(arg->is<VarNil>()) {
+			varCurl->setWriteCB(vm.getMemoryManager(), nullptr, {});
+			break;
+		}
+		if(!arg->is<VarFn>()) {
+			vm.fail(loc, "expected a function as parameter for this option, found: ",
+				vm.getTypeName(arg));
+			return nullptr;
+		}
+		VarFn *f = as<VarFn>(arg);
+		if(f->getParams().size() + f->getAssnParam().size() < 1) {
+			vm.fail(loc, "expected function to have at least 1",
+				" parameter for this option, found: ",
+				f->getParams().size() + f->getAssnParam().size());
+			return nullptr;
+		}
+		Span<Var *> cbArgs{args.begin() + 3, args.end()};
+		varCurl->setWriteCB(vm.getMemoryManager(), f, cbArgs);
+		break;
+	}
+	case CURLOPT_HTTPHEADER: {
+		vm.fail(loc, "CURLOPT_HTTPHEADER is not supported. Use CURLOPT_MIMEPOST instead");
+		return nullptr;
+	}
+	default: {
+		vm.fail(loc, "operation is not yet implemented");
+		return nullptr;
+	}
+	}
+	return vm.makeVar<VarInt>(loc, res);
+}
+
 INIT_MODULE(Curl)
 {
-	cbVM = &vm;
+	curl_global_init(CURL_GLOBAL_ALL);
 
 	VarModule *mod = vm.getCurrModule();
 
-	mod->addNativeFn(vm, "newEasy", feralCurlEasyInit);
-	mod->addNativeFn(vm, "strerr", feralCurlEasyStrErrFromInt, 1);
-	mod->addNativeFn(vm, "setWriteCallback", feralCurlSetWriteCallback, 1);
-	mod->addNativeFn(vm, "setProgressCallback", feralCurlSetProgressCallback, 1);
-	mod->addNativeFn(vm, "setProgressCallbackTick", feralCurlSetProgressCallbackTick, 1);
-
-	// register the curl type (register_type)
+	// Register the type names
 	vm.registerType<VarCurl>(loc, "Curl");
 
-	vm.addNativeTypeFn<VarCurl>(loc, "newMime", feralCurlMimeNew, 0);
+	mod->addNativeFn(vm, "newEasy", feralCurlEasyInit);
+	mod->addNativeFn(vm, "strerr", feralCurlEasyStrErrFromInt, 1);
+
 	vm.addNativeTypeFn<VarCurl>(loc, "getInfoNative", feralCurlEasyGetInfoNative, 2);
-	vm.addNativeTypeFn<VarCurl>(loc, "setOptNative", feralCurlEasySetOptNative, 2);
+	vm.addNativeTypeFn<VarCurl>(loc, "setOptNative", feralCurlEasySetOptNative, 2, true);
 	vm.addNativeTypeFn<VarCurl>(loc, "perform", feralCurlEasyPerform, 0);
+	vm.addNativeTypeFn<VarCurl>(loc, "setProgressCBTickNative", feralCurlSetProgressCBTick, 1);
 
-	vm.addNativeTypeFn<VarCurlMime>(loc, "addPartData", feralCurlMimePartAddData, 2);
-	vm.addNativeTypeFn<VarCurlMime>(loc, "addPartFile", feralCurlMimePartAddFile, 2);
+	setEnumVars(vm, mod, loc);
 
-	// all the enum values
+	return true;
+}
+
+DEINIT_MODULE(Curl) { curl_global_cleanup(); }
+
+void setEnumVars(VirtualMachine &vm, VarModule *mod, ModuleLoc loc)
+{
+	// All the enum values
 
 	// CURLcode
 	mod->addNativeVar("E_OK", vm.makeVar<VarInt>(loc, CURLE_OK));
@@ -786,18 +1117,6 @@ INIT_MODULE(Curl)
 	mod->addNativeVar("INFO_HTTPAUTH_USED", vm.makeVar<VarInt>(loc, CURLINFO_HTTPAUTH_USED));
 	mod->addNativeVar("INFO_PROXYAUTH_USED", vm.makeVar<VarInt>(loc, CURLINFO_PROXYAUTH_USED));
 	mod->addNativeVar("INFO_LASTONE", vm.makeVar<VarInt>(loc, CURLINFO_LASTONE));
-
-	curl_global_init(CURL_GLOBAL_ALL);
-
-	return true;
-}
-
-DEINIT_MODULE(Curl)
-{
-	ip.decVarRef(writeCallback);
-	ip.decVarRef(progressCallback);
-	for(auto &e : hss) curl_slist_free_all(e);
-	curl_global_cleanup();
 }
 
 } // namespace fer
