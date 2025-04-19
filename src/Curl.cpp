@@ -159,6 +159,44 @@ void VarCurl::clearMimeData()
 	}
 }
 
+curl_slist *VarCurl::createSList(VirtualMachine &vm, ModuleLoc loc, Var *data)
+{
+	if(data->is<VarMap>() && as<VarMap>(data)->getVal().empty()) return nullptr;
+
+	sllist.push_front(nullptr);
+	curl_slist *&lst = sllist.front();
+	if(data->is<VarStr>()) {
+		lst = curl_slist_append(lst, as<VarStr>(data)->getVal().c_str());
+	} else {
+		String tmpStr;
+		VarMap *map = as<VarMap>(data);
+		for(auto &item : map->getVal()) {
+			Var *v = nullptr;
+			Array<Var *, 1> tmp{item.second};
+			if(!vm.callVarAndExpect<VarStr>(loc, "str", v, tmp, {})) {
+				curl_slist_free_all(lst);
+				sllist.pop_front();
+				return nullptr;
+			}
+			const String &str = as<VarStr>(v)->getVal();
+			tmpStr.clear();
+			tmpStr += item.first;
+			tmpStr += ": ";
+			tmpStr += str.c_str();
+			lst = curl_slist_append(lst, tmpStr.c_str());
+			vm.decVarRef(v);
+		}
+	}
+	return lst;
+}
+void VarCurl::clearSList()
+{
+	while(!sllist.empty()) {
+		curl_slist_free_all(sllist.front());
+		sllist.pop_front();
+	}
+}
+
 CurlCallbackData::CurlCallbackData(ModuleLoc loc, VirtualMachine &vm, VarCurl *curl)
 	: loc(loc), vm(vm), curl(curl)
 {}
@@ -166,6 +204,18 @@ CurlCallbackData::CurlCallbackData(ModuleLoc loc, VirtualMachine &vm, VarCurl *c
 //////////////////////////////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////// Functions ////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////////
+
+Var *feralCurlGlobalTrace(VirtualMachine &vm, ModuleLoc loc, Span<Var *> args,
+			  const StringMap<AssnArgData> &assn_args)
+{
+	if(!args[1]->is<VarStr>()) {
+		vm.fail(args[1]->getLoc(), "expected trace config to be of type 'str', found: ",
+			vm.getTypeName(args[1]));
+		return nullptr;
+	}
+	int res = curl_global_trace(as<VarStr>(args[1])->getVal().c_str());
+	return vm.makeVar<VarInt>(loc, res);
+}
 
 Var *feralCurlEasyInit(VirtualMachine &vm, ModuleLoc loc, Span<Var *> args,
 		       const StringMap<AssnArgData> &assn_args)
@@ -271,7 +321,8 @@ Var *feralCurlEasySetOptNative(VirtualMachine &vm, ModuleLoc loc, Span<Var *> ar
 	switch(opt) {
 	case CURLOPT_CONNECT_ONLY:   // fallthrough
 	case CURLOPT_FOLLOWLOCATION: // fallthrough
-	case CURLOPT_NOPROGRESS: {
+	case CURLOPT_NOPROGRESS:     // fallthrough
+	case CURLOPT_VERBOSE: {
 		if(!arg->is<VarInt>()) {
 			vm.fail(loc, "expected an integer as parameter for this option, found: ",
 				vm.getTypeName(arg));
@@ -280,21 +331,21 @@ Var *feralCurlEasySetOptNative(VirtualMachine &vm, ModuleLoc loc, Span<Var *> ar
 		res = curl_easy_setopt(curl, (CURLoption)opt, as<VarInt>(arg)->getVal());
 		break;
 	}
+	case CURLOPT_POSTFIELDS: {
+		// We don't want POSTFIELDS as it doesn't copy the string data to curl,
+		// which is annoying to deal with.
+		opt = CURLOPT_COPYPOSTFIELDS;
+	}
 	case CURLOPT_URL:
 	case CURLOPT_USERAGENT:
 	case CURLOPT_CUSTOMREQUEST:
-	case CURLOPT_POSTFIELDS: {
+	case CURLOPT_COPYPOSTFIELDS: {
 		if(!arg->is<VarStr>()) {
 			vm.fail(loc, "expected a string as parameter for this option, found: ",
 				vm.getTypeName(arg));
 			return nullptr;
 		}
-		// tmp shenanigans because curl does not copy the string for POSTFIELDS in an
-		// internal buffer
-		static String tmp;
-		tmp.clear();
-		tmp = as<VarStr>(arg)->getVal();
-		res = curl_easy_setopt(curl, (CURLoption)opt, tmp.c_str());
+		res = curl_easy_setopt(curl, (CURLoption)opt, as<VarStr>(arg)->getVal().c_str());
 		break;
 	}
 	case CURLOPT_MIMEPOST: {
@@ -357,8 +408,21 @@ Var *feralCurlEasySetOptNative(VirtualMachine &vm, ModuleLoc loc, Span<Var *> ar
 		break;
 	}
 	case CURLOPT_HTTPHEADER: {
-		vm.fail(loc, "CURLOPT_HTTPHEADER is not supported. Use CURLOPT_MIMEPOST instead");
-		return nullptr;
+		if(!arg->is<VarMap>()) {
+			vm.fail(loc,
+				"expected a map of name-data pairs "
+				"as parameter for this option, found: ",
+				vm.getTypeName(arg));
+			return nullptr;
+		}
+		curl_slist *lst = varCurl->createSList(vm, loc, as<VarMap>(arg));
+		if(!lst) {
+			vm.warn(loc,
+				"failed to create slist from the given map (possibly empty map)");
+			return nullptr;
+		}
+		res = curl_easy_setopt(curl, (CURLoption)opt, lst);
+		break;
 	}
 	default: {
 		vm.fail(loc, "operation is not yet implemented");
@@ -377,8 +441,9 @@ INIT_MODULE(Curl)
 	// Register the type names
 	vm.registerType<VarCurl>(loc, "Curl");
 
-	mod->addNativeFn(vm, "newEasy", feralCurlEasyInit);
+	mod->addNativeFn(vm, "globalTrace", feralCurlGlobalTrace, 1);
 	mod->addNativeFn(vm, "strerr", feralCurlEasyStrErrFromInt, 1);
+	mod->addNativeFn(vm, "newEasy", feralCurlEasyInit);
 
 	vm.addNativeTypeFn<VarCurl>(loc, "getInfoNative", feralCurlEasyGetInfoNative, 2);
 	vm.addNativeTypeFn<VarCurl>(loc, "setOptNative", feralCurlEasySetOptNative, 2, true);
@@ -948,7 +1013,6 @@ void setEnumVars(VirtualMachine &vm, VarModule *mod, ModuleLoc loc)
 	mod->addNativeVar("OPT_SSLENGINE", vm.makeVar<VarInt>(loc, CURLOPT_SSLENGINE));
 	mod->addNativeVar("OPT_SSLENGINE_DEFAULT",
 			  vm.makeVar<VarInt>(loc, CURLOPT_SSLENGINE_DEFAULT));
-	mod->addNativeVar("OPT_SSL_FALSESTART", vm.makeVar<VarInt>(loc, CURLOPT_SSL_FALSESTART));
 	mod->addNativeVar("OPT_SSLVERSION", vm.makeVar<VarInt>(loc, CURLOPT_SSLVERSION));
 	mod->addNativeVar("OPT_SSL_VERIFYPEER", vm.makeVar<VarInt>(loc, CURLOPT_SSL_VERIFYPEER));
 	mod->addNativeVar("OPT_SSL_VERIFYHOST", vm.makeVar<VarInt>(loc, CURLOPT_SSL_VERIFYHOST));
