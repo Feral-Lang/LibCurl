@@ -14,6 +14,7 @@ class VarCurl : public Var
 {
 	CURL *val;
 	UniList<curl_mime *> mimelist; // list of mimes (for tracking memory)
+	UniList<curl_slist *> sllist;  // list of list of strings (for tracking memory)
 	VarFn *progCB;
 	VarFn *writeCB;
 	// If this is not nullptr, it's guaranteed to have 5 elements which are reserved:
@@ -39,6 +40,8 @@ public:
 	// data can be either VarMap or VarStr: if it's VarStr, the string is used as filename
 	curl_mime *createMime(VirtualMachine &vm, ModuleLoc loc, Var *data);
 	void clearMimeData();
+	curl_slist *createSList(VirtualMachine &vm, ModuleLoc loc, Var *data);
+	void clearSList();
 
 	inline void setProgIntervalTickMax(size_t maxVal) { progIntervalTickMax = maxVal; }
 
