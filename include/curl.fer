@@ -4,21 +4,21 @@ loadlib('curl/Curl');
 let io = import('std/io');
 
 let defaultWriteCB = fn(data) {
-	io.println('From defaultWriteCB: ', data);
+    io.println('From defaultWriteCB: ', data);
 };
 let defaultProgressCB = fn(dlTotal, dlDone, ulTotal, ulDone) {
-	let dlFraction = dlDone / dlTotal;
-	let lhs = (dlFraction * 100).round();
-	let rhs = 100 - lhs;
-	io.print('[', '#' * lhs, '-' * rhs, '] ', lhs, '%\t\r');
-	io.fflush(io.stdout);
+    let dlFraction = dlDone / dlTotal;
+    let lhs = (dlFraction * 100).round();
+    let rhs = 100 - lhs;
+    io.print('[', '#' * lhs, '-' * rhs, '] ', lhs, '%\t\r');
+    io.fflush(io.stdout);
 };
 
 let setProgressCBTick in CurlTy = fn(tick = 10) {
-	self.setProgressCBTickNative(tick);
+    self.setProgressCBTickNative(tick);
 };
 
 # cannot be chained, returns CURLcode
 let setOpt in CurlTy = fn(opt, val = nil, va...) {
-	return self.setOptNative(opt, val, va...);
+    return self.setOptNative(opt, val, va...);
 };

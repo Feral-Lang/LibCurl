@@ -7,26 +7,26 @@ let url = 'http://212.183.159.230/10MB.zip';
 let out = '10MB.zip';
 
 let writeCB = fn(data, file) {
-	io.fprint(file, data);
+    io.fprint(file, data);
 };
 
 # scoped so that outFile is closed before attempting to remove it
 # otherwise, an error is produced on windows
 {
-	let outFile = fs.fopen('10MB.zip', 'w+');
+    let outFile = fs.fopen('10MB.zip', 'w+');
 
-	let c = curl.newEasy();
-	c.setOpt(curl.OPT_URL, url);
-	c.setOpt(curl.OPT_FOLLOWLOCATION, 1);
-	c.setOpt(curl.OPT_NOPROGRESS, 0);
-	c.setOpt(curl.OPT_XFERINFOFUNCTION, curl.defaultProgressCB);
-	c.setOpt(curl.OPT_WRITEFUNCTION, writeCB, outFile);
-	let result = c.perform();
-	io.println();
-	if result != curl.E_OK {
-		io.println('Failed to download file \'', url, '\' to \'', out, '\': ', curl.strerr(result));
-		feral.exit(result);
-	}
+    let c = curl.newEasy();
+    c.setOpt(curl.OPT_URL, url);
+    c.setOpt(curl.OPT_FOLLOWLOCATION, 1);
+    c.setOpt(curl.OPT_NOPROGRESS, 0);
+    c.setOpt(curl.OPT_XFERINFOFUNCTION, curl.defaultProgressCB);
+    c.setOpt(curl.OPT_WRITEFUNCTION, writeCB, outFile);
+    let result = c.perform();
+    io.println();
+    if result != curl.E_OK {
+        io.println('Failed to download file \'', url, '\' to \'', out, '\': ', curl.strerr(result));
+        feral.exit(result);
+    }
 }
 io.println('Downloaded file: ', out);
 fs.remove(out);
