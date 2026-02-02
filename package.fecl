@@ -1,6 +1,6 @@
 author = 'Electrux';
 name = 'Curl';
-version = '0.0.1';
+version = '0.0.2';
 description = 'Curl C library bindings for Feral.';
 source = 'https://github.com/Feral-Lang/LibCurl';
 # depends = {};

@@ -3,9 +3,17 @@ loadlib('curl/Curl');
 
 let io = import('std/io');
 
+"
+  fn(data) -> Nil
+The default callback to write `data` - writes on `io.stdout`.
+"
 let defaultWriteCB = fn(data) {
     io.println('From defaultWriteCB: ', data);
 };
+"
+  fn(dlTotal, dlDone, ulTotal, ulDone) -> Nil
+The default callback to for progress bar - uses the done to total download ratio to print the bar.
+"
 let defaultProgressCB = fn(dlTotal, dlDone, ulTotal, ulDone) {
     let dlFraction = dlDone / dlTotal;
     let lhs = (dlFraction * 100).round();
@@ -14,6 +22,11 @@ let defaultProgressCB = fn(dlTotal, dlDone, ulTotal, ulDone) {
     io.fflush(io.stdout);
 };
 
+"
+  fn(tick = 10) -> Nil
+Sets how many times (`tick`) must the C progress bar callback must be invoked before invoking the Feral callback.
+This exists for performance reasons. Increasing the `tick` means less times Feral callback is called.
+"
 let setProgressCBTick in CurlTy = fn(tick = 10) {
     self.setProgressCBTickNative(tick);
 };
