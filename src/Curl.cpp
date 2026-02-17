@@ -5,7 +5,7 @@ namespace fer
 
 constexpr size_t CURL_DEFAULT_PROGRESS_INTERVAL_TICK_MAX = 10;
 
-void setEnumVars(VirtualMachine &vm, VarModule *mod, ModuleLoc loc);
+void setEnumVars(VirtualMachine &vm, ModuleLoc loc);
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////// Callbacks ////////////////////////////////////////////
@@ -60,7 +60,7 @@ size_t curlWriteCallback(char *ptr, size_t size, size_t nmemb, void *userdata)
 //////////////////////////////////////////////////////////////////////////////////////////////////
 
 VarCurl::VarCurl(ModuleLoc loc, CURL *val)
-    : Var(loc, false, false), val(val), progCB(nullptr), writeCB(nullptr), progCBArgs(nullptr),
+    : Var(loc, 0), val(val), progCB(nullptr), writeCB(nullptr), progCBArgs(nullptr),
       writeCBArgs(nullptr), progIntervalTick(0),
       progIntervalTickMax(CURL_DEFAULT_PROGRESS_INTERVAL_TICK_MAX)
 {}
@@ -70,56 +70,44 @@ VarCurl::~VarCurl()
     curl_easy_cleanup(val);
 }
 
-void VarCurl::onCreate(MemoryManager &mem)
+void VarCurl::onCreate(VirtualMachine &vm)
 {
-    progCBArgs = Var::makeVarWithRef<VarVec>(mem, getLoc(), 5, true);
-    progCBArgs->push(nullptr);
-    progCBArgs->push(Var::makeVarWithRef<VarFlt>(mem, getLoc(), 0.0));
-    progCBArgs->push(Var::makeVarWithRef<VarFlt>(mem, getLoc(), 0.0));
-    progCBArgs->push(Var::makeVarWithRef<VarFlt>(mem, getLoc(), 0.0));
-    progCBArgs->push(Var::makeVarWithRef<VarFlt>(mem, getLoc(), 0.0));
+    progCBArgs = vm.makeVar<VarVec>(getLoc(), 5, true);
+    progCBArgs->push(vm, nullptr, false);
+    progCBArgs->push(vm, vm.makeVar<VarFlt>(getLoc(), 0.0), true);
+    progCBArgs->push(vm, vm.makeVar<VarFlt>(getLoc(), 0.0), true);
+    progCBArgs->push(vm, vm.makeVar<VarFlt>(getLoc(), 0.0), true);
+    progCBArgs->push(vm, vm.makeVar<VarFlt>(getLoc(), 0.0), true);
 
-    writeCBArgs = Var::makeVarWithRef<VarVec>(mem, ModuleLoc(), 2, true);
-    writeCBArgs->push(nullptr);
-    writeCBArgs->push(Var::makeVarWithRef<VarStr>(mem, getLoc(), ""));
+    writeCBArgs = vm.makeVar<VarVec>({}, 2, true);
+    writeCBArgs->push(vm, nullptr, false);
+    writeCBArgs->push(vm, vm.makeVar<VarStr>(getLoc(), ""), true);
 }
-void VarCurl::onDestroy(MemoryManager &mem)
+void VarCurl::onDestroy(VirtualMachine &vm)
 {
-    Var::decVarRef(mem, writeCBArgs);
-    Var::decVarRef(mem, progCBArgs);
-    setProgressCB(mem, nullptr, {});
-    setWriteCB(mem, nullptr, {});
+    vm.decVarRef(writeCBArgs);
+    vm.decVarRef(progCBArgs);
+    setProgressCB(vm, nullptr, {});
+    setWriteCB(vm, nullptr, {});
 }
 
-void VarCurl::setProgressCB(MemoryManager &mem, VarFn *_progCB, Span<Var *> args)
+void VarCurl::setProgressCB(VirtualMachine &vm, VarFn *_progCB, Span<Var *> args)
 {
-    if(progCB) Var::decVarRef(mem, progCB);
+    if(progCB) vm.decVarRef(progCB);
     progCB = _progCB;
-    if(progCB) Var::incVarRef(progCB);
+    if(progCB) vm.incVarRef(progCB);
     if(!progCBArgs) return;
-    while(progCBArgs->size() > 5) {
-        Var::decVarRef(mem, progCBArgs->back());
-        progCBArgs->pop();
-    }
-    for(auto &arg : args) {
-        Var::incVarRef(arg);
-        progCBArgs->push(arg);
-    }
+    while(progCBArgs->size() > 5) { progCBArgs->pop(vm, true); }
+    for(auto &arg : args) { progCBArgs->push(vm, arg, true); }
 }
-void VarCurl::setWriteCB(MemoryManager &mem, VarFn *_writeCB, Span<Var *> args)
+void VarCurl::setWriteCB(VirtualMachine &vm, VarFn *_writeCB, Span<Var *> args)
 {
-    if(writeCB) Var::decVarRef(mem, writeCB);
+    if(writeCB) vm.decVarRef(writeCB);
     writeCB = _writeCB;
-    if(writeCB) Var::incVarRef(writeCB);
+    if(writeCB) vm.incVarRef(writeCB);
     if(!writeCBArgs) return;
-    while(writeCBArgs->size() > 5) {
-        Var::decVarRef(mem, writeCBArgs->back());
-        writeCBArgs->pop();
-    }
-    for(auto &arg : args) {
-        Var::incVarRef(arg);
-        writeCBArgs->push(arg);
-    }
+    while(writeCBArgs->size() > 5) { writeCBArgs->pop(vm, true); }
+    for(auto &arg : args) { writeCBArgs->push(vm, arg, true); }
 }
 
 curl_mime *VarCurl::createMime(VirtualMachine &vm, ModuleLoc loc, Var *data)
@@ -334,7 +322,7 @@ FERAL_FUNC(feralCurlEasySetOptNative, 2, true,
     }
     case CURLOPT_XFERINFOFUNCTION: {
         if(arg->is<VarNil>()) {
-            varCurl->setProgressCB(vm.getMemoryManager(), nullptr, {});
+            varCurl->setProgressCB(vm, nullptr, {});
             break;
         }
         EXPECT(VarFn, arg, "xfer info function");
@@ -346,12 +334,12 @@ FERAL_FUNC(feralCurlEasySetOptNative, 2, true,
             return nullptr;
         }
         Span<Var *> cbArgs{args.begin() + 3, args.end()};
-        varCurl->setProgressCB(vm.getMemoryManager(), f, cbArgs);
+        varCurl->setProgressCB(vm, f, cbArgs);
         break;
     }
     case CURLOPT_WRITEFUNCTION: {
         if(arg->is<VarNil>()) {
-            varCurl->setWriteCB(vm.getMemoryManager(), nullptr, {});
+            varCurl->setWriteCB(vm, nullptr, {});
             break;
         }
         EXPECT(VarFn, arg, "write function");
@@ -363,7 +351,7 @@ FERAL_FUNC(feralCurlEasySetOptNative, 2, true,
             return nullptr;
         }
         Span<Var *> cbArgs{args.begin() + 3, args.end()};
-        varCurl->setWriteCB(vm.getMemoryManager(), f, cbArgs);
+        varCurl->setWriteCB(vm, f, cbArgs);
         break;
     }
     case CURLOPT_HTTPHEADER: {
@@ -384,819 +372,620 @@ FERAL_FUNC(feralCurlEasySetOptNative, 2, true,
     return vm.makeVar<VarInt>(loc, res);
 }
 
-INIT_MODULE(Curl)
+INIT_DLL(Curl)
 {
     curl_global_init(CURL_GLOBAL_ALL);
 
-    VarModule *mod = vm.getCurrModule();
-
     // Register the type names
-    vm.registerType<VarCurl>(loc, "Curl", "The Curl C library's type representation.");
+    vm.addLocalType<VarCurl>(loc, "Curl", "The Curl C library's type representation.");
 
-    mod->addNativeFn(vm, "globalTrace", feralCurlGlobalTrace);
-    mod->addNativeFn(vm, "strerr", feralCurlEasyStrErrFromInt);
-    mod->addNativeFn(vm, "newEasy", feralCurlEasyInit);
+    vm.addLocal(loc, "globalTrace", feralCurlGlobalTrace);
+    vm.addLocal(loc, "strerr", feralCurlEasyStrErrFromInt);
+    vm.addLocal(loc, "newEasy", feralCurlEasyInit);
 
-    vm.addNativeTypeFn<VarCurl>(loc, "getInfoNative", feralCurlEasyGetInfoNative);
-    vm.addNativeTypeFn<VarCurl>(loc, "setOptNative", feralCurlEasySetOptNative);
-    vm.addNativeTypeFn<VarCurl>(loc, "perform", feralCurlEasyPerform);
-    vm.addNativeTypeFn<VarCurl>(loc, "setProgressCBTickNative", feralCurlSetProgressCBTick);
+    vm.addTypeFn<VarCurl>(loc, "getInfoNative", feralCurlEasyGetInfoNative);
+    vm.addTypeFn<VarCurl>(loc, "setOptNative", feralCurlEasySetOptNative);
+    vm.addTypeFn<VarCurl>(loc, "perform", feralCurlEasyPerform);
+    vm.addTypeFn<VarCurl>(loc, "setProgressCBTickNative", feralCurlSetProgressCBTick);
 
-    setEnumVars(vm, mod, loc);
+    setEnumVars(vm, loc);
 
     return true;
 }
 
-DEINIT_MODULE(Curl) { curl_global_cleanup(); }
+DEINIT_DLL(Curl) { curl_global_cleanup(); }
 
-void setEnumVars(VirtualMachine &vm, VarModule *mod, ModuleLoc loc)
+void setEnumVars(VirtualMachine &vm, ModuleLoc loc)
 {
     // All the enum values
 
     // CURLcode
-    mod->addNativeVar(vm, "E_OK", "", vm.makeVar<VarInt>(loc, CURLE_OK));
-    mod->addNativeVar(vm, "E_UNSUPPORTED_PROTOCOL", "",
-                      vm.makeVar<VarInt>(loc, CURLE_UNSUPPORTED_PROTOCOL));
-    mod->addNativeVar(vm, "E_FAILED_INIT", "", vm.makeVar<VarInt>(loc, CURLE_FAILED_INIT));
-    mod->addNativeVar(vm, "E_URL_MALFORMAT", "", vm.makeVar<VarInt>(loc, CURLE_URL_MALFORMAT));
-    mod->addNativeVar(vm, "E_NOT_BUILT_IN", "", vm.makeVar<VarInt>(loc, CURLE_NOT_BUILT_IN));
-    mod->addNativeVar(vm, "E_COULDNT_RESOLVE_PROXY", "",
-                      vm.makeVar<VarInt>(loc, CURLE_COULDNT_RESOLVE_PROXY));
-    mod->addNativeVar(vm, "E_COULDNT_RESOLVE_HOST", "",
-                      vm.makeVar<VarInt>(loc, CURLE_COULDNT_RESOLVE_HOST));
-    mod->addNativeVar(vm, "E_COULDNT_CONNECT", "", vm.makeVar<VarInt>(loc, CURLE_COULDNT_CONNECT));
+    vm.makeLocal<VarInt>(loc, "E_OK", "", CURLE_OK);
+    vm.makeLocal<VarInt>(loc, "E_UNSUPPORTED_PROTOCOL", "", CURLE_UNSUPPORTED_PROTOCOL);
+    vm.makeLocal<VarInt>(loc, "E_FAILED_INIT", "", CURLE_FAILED_INIT);
+    vm.makeLocal<VarInt>(loc, "E_URL_MALFORMAT", "", CURLE_URL_MALFORMAT);
+    vm.makeLocal<VarInt>(loc, "E_NOT_BUILT_IN", "", CURLE_NOT_BUILT_IN);
+    vm.makeLocal<VarInt>(loc, "E_COULDNT_RESOLVE_PROXY", "", CURLE_COULDNT_RESOLVE_PROXY);
+    vm.makeLocal<VarInt>(loc, "E_COULDNT_RESOLVE_HOST", "", CURLE_COULDNT_RESOLVE_HOST);
+    vm.makeLocal<VarInt>(loc, "E_COULDNT_CONNECT", "", CURLE_COULDNT_CONNECT);
 #if CURL_AT_LEAST_VERSION(7, 51, 0)
-    mod->addNativeVar(vm, "E_WEIRD_SERVER_REPLY", "",
-                      vm.makeVar<VarInt>(loc, CURLE_WEIRD_SERVER_REPLY));
+    vm.makeLocal<VarInt>(loc, "E_WEIRD_SERVER_REPLY", "", CURLE_WEIRD_SERVER_REPLY);
 #else
-    mod->addNativeVar(vm, "E_FTP_WEIRD_SERVER_REPLY", "",
-                      vm.makeVar<VarInt>(loc, CURLE_FTP_WEIRD_SERVER_REPLY));
+    vm.makeLocal<VarInt>(loc, "E_FTP_WEIRD_SERVER_REPLY", "", CURLE_FTP_WEIRD_SERVER_REPLY);
 #endif
-    mod->addNativeVar(vm, "E_REMOTE_ACCESS_DENIED", "",
-                      vm.makeVar<VarInt>(loc, CURLE_REMOTE_ACCESS_DENIED));
-    mod->addNativeVar(vm, "E_FTP_ACCEPT_FAILED", "",
-                      vm.makeVar<VarInt>(loc, CURLE_FTP_ACCEPT_FAILED));
-    mod->addNativeVar(vm, "E_FTP_WEIRD_PASS_REPLY", "",
-                      vm.makeVar<VarInt>(loc, CURLE_FTP_WEIRD_PASS_REPLY));
-    mod->addNativeVar(vm, "E_FTP_ACCEPT_TIMEOUT", "",
-                      vm.makeVar<VarInt>(loc, CURLE_FTP_ACCEPT_TIMEOUT));
-    mod->addNativeVar(vm, "E_FTP_WEIRD_PASV_REPLY", "",
-                      vm.makeVar<VarInt>(loc, CURLE_FTP_WEIRD_PASV_REPLY));
-    mod->addNativeVar(vm, "E_FTP_WEIRD_227_FORMAT", "",
-                      vm.makeVar<VarInt>(loc, CURLE_FTP_WEIRD_227_FORMAT));
-    mod->addNativeVar(vm, "E_FTP_CANT_GET_HOST", "",
-                      vm.makeVar<VarInt>(loc, CURLE_FTP_CANT_GET_HOST));
-    mod->addNativeVar(vm, "E_HTTP2", "", vm.makeVar<VarInt>(loc, CURLE_HTTP2));
-    mod->addNativeVar(vm, "E_FTP_COULDNT_SET_TYPE", "",
-                      vm.makeVar<VarInt>(loc, CURLE_FTP_COULDNT_SET_TYPE));
-    mod->addNativeVar(vm, "E_PARTIAL_FILE", "", vm.makeVar<VarInt>(loc, CURLE_PARTIAL_FILE));
-    mod->addNativeVar(vm, "E_FTP_COULDNT_RETR_FILE", "",
-                      vm.makeVar<VarInt>(loc, CURLE_FTP_COULDNT_RETR_FILE));
-    mod->addNativeVar(vm, "E_OBSOLETE20", "", vm.makeVar<VarInt>(loc, CURLE_OBSOLETE20));
-    mod->addNativeVar(vm, "E_QUOTE_ERROR", "", vm.makeVar<VarInt>(loc, CURLE_QUOTE_ERROR));
-    mod->addNativeVar(vm, "E_HTTP_RETURNED_ERROR", "",
-                      vm.makeVar<VarInt>(loc, CURLE_HTTP_RETURNED_ERROR));
-    mod->addNativeVar(vm, "E_WRITE_ERROR", "", vm.makeVar<VarInt>(loc, CURLE_WRITE_ERROR));
-    mod->addNativeVar(vm, "E_OBSOLETE24", "", vm.makeVar<VarInt>(loc, CURLE_OBSOLETE24));
-    mod->addNativeVar(vm, "E_UPLOAD_FAILED", "", vm.makeVar<VarInt>(loc, CURLE_UPLOAD_FAILED));
-    mod->addNativeVar(vm, "E_READ_ERROR", "", vm.makeVar<VarInt>(loc, CURLE_READ_ERROR));
-    mod->addNativeVar(vm, "E_OUT_OF_MEMORY", "", vm.makeVar<VarInt>(loc, CURLE_OUT_OF_MEMORY));
-    mod->addNativeVar(vm, "E_OPERATION_TIMEDOUT", "",
-                      vm.makeVar<VarInt>(loc, CURLE_OPERATION_TIMEDOUT));
-    mod->addNativeVar(vm, "E_OBSOLETE29", "", vm.makeVar<VarInt>(loc, CURLE_OBSOLETE29));
-    mod->addNativeVar(vm, "E_FTP_PORT_FAILED", "", vm.makeVar<VarInt>(loc, CURLE_FTP_PORT_FAILED));
-    mod->addNativeVar(vm, "E_FTP_COULDNT_USE_REST", "",
-                      vm.makeVar<VarInt>(loc, CURLE_FTP_COULDNT_USE_REST));
-    mod->addNativeVar(vm, "E_OBSOLETE32", "", vm.makeVar<VarInt>(loc, CURLE_OBSOLETE32));
-    mod->addNativeVar(vm, "E_RANGE_ERROR", "", vm.makeVar<VarInt>(loc, CURLE_RANGE_ERROR));
-    mod->addNativeVar(vm, "E_HTTP_POST_ERROR", "", vm.makeVar<VarInt>(loc, CURLE_HTTP_POST_ERROR));
-    mod->addNativeVar(vm, "E_SSL_CONNECT_ERROR", "",
-                      vm.makeVar<VarInt>(loc, CURLE_SSL_CONNECT_ERROR));
-    mod->addNativeVar(vm, "E_BAD_DOWNLOAD_RESUME", "",
-                      vm.makeVar<VarInt>(loc, CURLE_BAD_DOWNLOAD_RESUME));
-    mod->addNativeVar(vm, "E_FILE_COULDNT_READ_FILE", "",
-                      vm.makeVar<VarInt>(loc, CURLE_FILE_COULDNT_READ_FILE));
-    mod->addNativeVar(vm, "E_LDAP_CANNOT_BIND", "",
-                      vm.makeVar<VarInt>(loc, CURLE_LDAP_CANNOT_BIND));
-    mod->addNativeVar(vm, "E_LDAP_SEARCH_FAILED", "",
-                      vm.makeVar<VarInt>(loc, CURLE_LDAP_SEARCH_FAILED));
-    mod->addNativeVar(vm, "E_OBSOLETE40", "", vm.makeVar<VarInt>(loc, CURLE_OBSOLETE40));
-    mod->addNativeVar(vm, "E_FUNCTION_NOT_FOUND", "",
-                      vm.makeVar<VarInt>(loc, CURLE_FUNCTION_NOT_FOUND));
-    mod->addNativeVar(vm, "E_ABORTED_BY_CALLBACK", "",
-                      vm.makeVar<VarInt>(loc, CURLE_ABORTED_BY_CALLBACK));
-    mod->addNativeVar(vm, "E_BAD_FUNCTION_ARGUMENT", "",
-                      vm.makeVar<VarInt>(loc, CURLE_BAD_FUNCTION_ARGUMENT));
-    mod->addNativeVar(vm, "E_OBSOLETE44", "", vm.makeVar<VarInt>(loc, CURLE_OBSOLETE44));
-    mod->addNativeVar(vm, "E_INTERFACE_FAILED", "",
-                      vm.makeVar<VarInt>(loc, CURLE_INTERFACE_FAILED));
-    mod->addNativeVar(vm, "E_OBSOLETE46", "", vm.makeVar<VarInt>(loc, CURLE_OBSOLETE46));
-    mod->addNativeVar(vm, "E_TOO_MANY_REDIRECTS", "",
-                      vm.makeVar<VarInt>(loc, CURLE_TOO_MANY_REDIRECTS));
-    mod->addNativeVar(vm, "E_UNKNOWN_OPTION", "", vm.makeVar<VarInt>(loc, CURLE_UNKNOWN_OPTION));
-    mod->addNativeVar(vm, "E_TELNET_OPTION_SYNTAX", "",
-                      vm.makeVar<VarInt>(loc, CURLE_TELNET_OPTION_SYNTAX));
-    mod->addNativeVar(vm, "E_OBSOLETE50", "", vm.makeVar<VarInt>(loc, CURLE_OBSOLETE50));
+    vm.makeLocal<VarInt>(loc, "E_REMOTE_ACCESS_DENIED", "", CURLE_REMOTE_ACCESS_DENIED);
+    vm.makeLocal<VarInt>(loc, "E_FTP_ACCEPT_FAILED", "", CURLE_FTP_ACCEPT_FAILED);
+    vm.makeLocal<VarInt>(loc, "E_FTP_WEIRD_PASS_REPLY", "", CURLE_FTP_WEIRD_PASS_REPLY);
+    vm.makeLocal<VarInt>(loc, "E_FTP_ACCEPT_TIMEOUT", "", CURLE_FTP_ACCEPT_TIMEOUT);
+    vm.makeLocal<VarInt>(loc, "E_FTP_WEIRD_PASV_REPLY", "", CURLE_FTP_WEIRD_PASV_REPLY);
+    vm.makeLocal<VarInt>(loc, "E_FTP_WEIRD_227_FORMAT", "", CURLE_FTP_WEIRD_227_FORMAT);
+    vm.makeLocal<VarInt>(loc, "E_FTP_CANT_GET_HOST", "", CURLE_FTP_CANT_GET_HOST);
+    vm.makeLocal<VarInt>(loc, "E_HTTP2", "", CURLE_HTTP2);
+    vm.makeLocal<VarInt>(loc, "E_FTP_COULDNT_SET_TYPE", "", CURLE_FTP_COULDNT_SET_TYPE);
+    vm.makeLocal<VarInt>(loc, "E_PARTIAL_FILE", "", CURLE_PARTIAL_FILE);
+    vm.makeLocal<VarInt>(loc, "E_FTP_COULDNT_RETR_FILE", "", CURLE_FTP_COULDNT_RETR_FILE);
+    vm.makeLocal<VarInt>(loc, "E_OBSOLETE20", "", CURLE_OBSOLETE20);
+    vm.makeLocal<VarInt>(loc, "E_QUOTE_ERROR", "", CURLE_QUOTE_ERROR);
+    vm.makeLocal<VarInt>(loc, "E_HTTP_RETURNED_ERROR", "", CURLE_HTTP_RETURNED_ERROR);
+    vm.makeLocal<VarInt>(loc, "E_WRITE_ERROR", "", CURLE_WRITE_ERROR);
+    vm.makeLocal<VarInt>(loc, "E_OBSOLETE24", "", CURLE_OBSOLETE24);
+    vm.makeLocal<VarInt>(loc, "E_UPLOAD_FAILED", "", CURLE_UPLOAD_FAILED);
+    vm.makeLocal<VarInt>(loc, "E_READ_ERROR", "", CURLE_READ_ERROR);
+    vm.makeLocal<VarInt>(loc, "E_OUT_OF_MEMORY", "", CURLE_OUT_OF_MEMORY);
+    vm.makeLocal<VarInt>(loc, "E_OPERATION_TIMEDOUT", "", CURLE_OPERATION_TIMEDOUT);
+    vm.makeLocal<VarInt>(loc, "E_OBSOLETE29", "", CURLE_OBSOLETE29);
+    vm.makeLocal<VarInt>(loc, "E_FTP_PORT_FAILED", "", CURLE_FTP_PORT_FAILED);
+    vm.makeLocal<VarInt>(loc, "E_FTP_COULDNT_USE_REST", "", CURLE_FTP_COULDNT_USE_REST);
+    vm.makeLocal<VarInt>(loc, "E_OBSOLETE32", "", CURLE_OBSOLETE32);
+    vm.makeLocal<VarInt>(loc, "E_RANGE_ERROR", "", CURLE_RANGE_ERROR);
+    vm.makeLocal<VarInt>(loc, "E_HTTP_POST_ERROR", "", CURLE_HTTP_POST_ERROR);
+    vm.makeLocal<VarInt>(loc, "E_SSL_CONNECT_ERROR", "", CURLE_SSL_CONNECT_ERROR);
+    vm.makeLocal<VarInt>(loc, "E_BAD_DOWNLOAD_RESUME", "", CURLE_BAD_DOWNLOAD_RESUME);
+    vm.makeLocal<VarInt>(loc, "E_FILE_COULDNT_READ_FILE", "", CURLE_FILE_COULDNT_READ_FILE);
+    vm.makeLocal<VarInt>(loc, "E_LDAP_CANNOT_BIND", "", CURLE_LDAP_CANNOT_BIND);
+    vm.makeLocal<VarInt>(loc, "E_LDAP_SEARCH_FAILED", "", CURLE_LDAP_SEARCH_FAILED);
+    vm.makeLocal<VarInt>(loc, "E_OBSOLETE40", "", CURLE_OBSOLETE40);
+    vm.makeLocal<VarInt>(loc, "E_FUNCTION_NOT_FOUND", "", CURLE_FUNCTION_NOT_FOUND);
+    vm.makeLocal<VarInt>(loc, "E_ABORTED_BY_CALLBACK", "", CURLE_ABORTED_BY_CALLBACK);
+    vm.makeLocal<VarInt>(loc, "E_BAD_FUNCTION_ARGUMENT", "", CURLE_BAD_FUNCTION_ARGUMENT);
+    vm.makeLocal<VarInt>(loc, "E_OBSOLETE44", "", CURLE_OBSOLETE44);
+    vm.makeLocal<VarInt>(loc, "E_INTERFACE_FAILED", "", CURLE_INTERFACE_FAILED);
+    vm.makeLocal<VarInt>(loc, "E_OBSOLETE46", "", CURLE_OBSOLETE46);
+    vm.makeLocal<VarInt>(loc, "E_TOO_MANY_REDIRECTS", "", CURLE_TOO_MANY_REDIRECTS);
+    vm.makeLocal<VarInt>(loc, "E_UNKNOWN_OPTION", "", CURLE_UNKNOWN_OPTION);
+    vm.makeLocal<VarInt>(loc, "E_TELNET_OPTION_SYNTAX", "", CURLE_TELNET_OPTION_SYNTAX);
+    vm.makeLocal<VarInt>(loc, "E_OBSOLETE50", "", CURLE_OBSOLETE50);
 #if CURL_AT_LEAST_VERSION(7, 62, 0)
-    mod->addNativeVar(vm, "E_OBSOLETE51", "", vm.makeVar<VarInt>(loc, CURLE_OBSOLETE51));
+    vm.makeLocal<VarInt>(loc, "E_OBSOLETE51", "", CURLE_OBSOLETE51);
 #endif
-    mod->addNativeVar(vm, "E_GOT_NOTHING", "", vm.makeVar<VarInt>(loc, CURLE_GOT_NOTHING));
-    mod->addNativeVar(vm, "E_SSL_ENGINE_NOTFOUND", "",
-                      vm.makeVar<VarInt>(loc, CURLE_SSL_ENGINE_NOTFOUND));
-    mod->addNativeVar(vm, "E_SSL_ENGINE_SETFAILED", "",
-                      vm.makeVar<VarInt>(loc, CURLE_SSL_ENGINE_SETFAILED));
-    mod->addNativeVar(vm, "E_SEND_ERROR", "", vm.makeVar<VarInt>(loc, CURLE_SEND_ERROR));
-    mod->addNativeVar(vm, "E_RECV_ERROR", "", vm.makeVar<VarInt>(loc, CURLE_RECV_ERROR));
-    mod->addNativeVar(vm, "E_OBSOLETE57", "", vm.makeVar<VarInt>(loc, CURLE_OBSOLETE57));
-    mod->addNativeVar(vm, "E_SSL_CERTPROBLEM", "", vm.makeVar<VarInt>(loc, CURLE_SSL_CERTPROBLEM));
-    mod->addNativeVar(vm, "E_SSL_CIPHER", "", vm.makeVar<VarInt>(loc, CURLE_SSL_CIPHER));
-    mod->addNativeVar(vm, "E_PEER_FAILED_VERIFICATION", "",
-                      vm.makeVar<VarInt>(loc, CURLE_PEER_FAILED_VERIFICATION));
-    mod->addNativeVar(vm, "E_BAD_CONTENT_ENCODING", "",
-                      vm.makeVar<VarInt>(loc, CURLE_BAD_CONTENT_ENCODING));
-    mod->addNativeVar(vm, "E_LDAP_INVALID_URL", "",
-                      vm.makeVar<VarInt>(loc, CURLE_LDAP_INVALID_URL));
-    mod->addNativeVar(vm, "E_FILESIZE_EXCEEDED", "",
-                      vm.makeVar<VarInt>(loc, CURLE_FILESIZE_EXCEEDED));
-    mod->addNativeVar(vm, "E_USE_SSL_FAILED", "", vm.makeVar<VarInt>(loc, CURLE_USE_SSL_FAILED));
-    mod->addNativeVar(vm, "E_SEND_FAIL_REWIND", "",
-                      vm.makeVar<VarInt>(loc, CURLE_SEND_FAIL_REWIND));
-    mod->addNativeVar(vm, "E_SSL_ENGINE_INITFAILED", "",
-                      vm.makeVar<VarInt>(loc, CURLE_SSL_ENGINE_INITFAILED));
-    mod->addNativeVar(vm, "E_LOGIN_DENIED", "", vm.makeVar<VarInt>(loc, CURLE_LOGIN_DENIED));
-    mod->addNativeVar(vm, "E_TFTP_NOTFOUND", "", vm.makeVar<VarInt>(loc, CURLE_TFTP_NOTFOUND));
-    mod->addNativeVar(vm, "E_TFTP_PERM", "", vm.makeVar<VarInt>(loc, CURLE_TFTP_PERM));
-    mod->addNativeVar(vm, "E_REMOTE_DISK_FULL", "",
-                      vm.makeVar<VarInt>(loc, CURLE_REMOTE_DISK_FULL));
-    mod->addNativeVar(vm, "E_TFTP_ILLEGAL", "", vm.makeVar<VarInt>(loc, CURLE_TFTP_ILLEGAL));
-    mod->addNativeVar(vm, "E_TFTP_UNKNOWNID", "", vm.makeVar<VarInt>(loc, CURLE_TFTP_UNKNOWNID));
-    mod->addNativeVar(vm, "E_REMOTE_FILE_EXISTS", "",
-                      vm.makeVar<VarInt>(loc, CURLE_REMOTE_FILE_EXISTS));
-    mod->addNativeVar(vm, "E_TFTP_NOSUCHUSER", "", vm.makeVar<VarInt>(loc, CURLE_TFTP_NOSUCHUSER));
-    mod->addNativeVar(vm, "E_CONV_FAILED", "", vm.makeVar<VarInt>(loc, CURLE_CONV_FAILED));
-    mod->addNativeVar(vm, "E_CONV_REQD", "", vm.makeVar<VarInt>(loc, CURLE_CONV_REQD));
-    mod->addNativeVar(vm, "E_SSL_CACERT_BADFILE", "",
-                      vm.makeVar<VarInt>(loc, CURLE_SSL_CACERT_BADFILE));
-    mod->addNativeVar(vm, "E_REMOTE_FILE_NOT_FOUND", "",
-                      vm.makeVar<VarInt>(loc, CURLE_REMOTE_FILE_NOT_FOUND));
-    mod->addNativeVar(vm, "E_SSH", "", vm.makeVar<VarInt>(loc, CURLE_SSH));
-    mod->addNativeVar(vm, "E_SSL_SHUTDOWN_FAILED", "",
-                      vm.makeVar<VarInt>(loc, CURLE_SSL_SHUTDOWN_FAILED));
-    mod->addNativeVar(vm, "E_AGAIN", "", vm.makeVar<VarInt>(loc, CURLE_AGAIN));
-    mod->addNativeVar(vm, "E_SSL_CRL_BADFILE", "", vm.makeVar<VarInt>(loc, CURLE_SSL_CRL_BADFILE));
-    mod->addNativeVar(vm, "E_SSL_ISSUER_ERROR", "",
-                      vm.makeVar<VarInt>(loc, CURLE_SSL_ISSUER_ERROR));
-    mod->addNativeVar(vm, "E_FTP_PRET_FAILED", "", vm.makeVar<VarInt>(loc, CURLE_FTP_PRET_FAILED));
-    mod->addNativeVar(vm, "E_RTSP_CSEQ_ERROR", "", vm.makeVar<VarInt>(loc, CURLE_RTSP_CSEQ_ERROR));
-    mod->addNativeVar(vm, "E_RTSP_SESSION_ERROR", "",
-                      vm.makeVar<VarInt>(loc, CURLE_RTSP_SESSION_ERROR));
-    mod->addNativeVar(vm, "E_FTP_BAD_FILE_LIST", "",
-                      vm.makeVar<VarInt>(loc, CURLE_FTP_BAD_FILE_LIST));
-    mod->addNativeVar(vm, "E_CHUNK_FAILED", "", vm.makeVar<VarInt>(loc, CURLE_CHUNK_FAILED));
-    mod->addNativeVar(vm, "E_NO_CONNECTION_AVAILABLE", "",
-                      vm.makeVar<VarInt>(loc, CURLE_NO_CONNECTION_AVAILABLE));
-    mod->addNativeVar(vm, "E_SSL_PINNEDPUBKEYNOTMATCH", "",
-                      vm.makeVar<VarInt>(loc, CURLE_SSL_PINNEDPUBKEYNOTMATCH));
-    mod->addNativeVar(vm, "E_SSL_INVALIDCERTSTATUS", "",
-                      vm.makeVar<VarInt>(loc, CURLE_SSL_INVALIDCERTSTATUS));
+    vm.makeLocal<VarInt>(loc, "E_GOT_NOTHING", "", CURLE_GOT_NOTHING);
+    vm.makeLocal<VarInt>(loc, "E_SSL_ENGINE_NOTFOUND", "", CURLE_SSL_ENGINE_NOTFOUND);
+    vm.makeLocal<VarInt>(loc, "E_SSL_ENGINE_SETFAILED", "", CURLE_SSL_ENGINE_SETFAILED);
+    vm.makeLocal<VarInt>(loc, "E_SEND_ERROR", "", CURLE_SEND_ERROR);
+    vm.makeLocal<VarInt>(loc, "E_RECV_ERROR", "", CURLE_RECV_ERROR);
+    vm.makeLocal<VarInt>(loc, "E_OBSOLETE57", "", CURLE_OBSOLETE57);
+    vm.makeLocal<VarInt>(loc, "E_SSL_CERTPROBLEM", "", CURLE_SSL_CERTPROBLEM);
+    vm.makeLocal<VarInt>(loc, "E_SSL_CIPHER", "", CURLE_SSL_CIPHER);
+    vm.makeLocal<VarInt>(loc, "E_PEER_FAILED_VERIFICATION", "", CURLE_PEER_FAILED_VERIFICATION);
+    vm.makeLocal<VarInt>(loc, "E_BAD_CONTENT_ENCODING", "", CURLE_BAD_CONTENT_ENCODING);
+    vm.makeLocal<VarInt>(loc, "E_LDAP_INVALID_URL", "", CURLE_LDAP_INVALID_URL);
+    vm.makeLocal<VarInt>(loc, "E_FILESIZE_EXCEEDED", "", CURLE_FILESIZE_EXCEEDED);
+    vm.makeLocal<VarInt>(loc, "E_USE_SSL_FAILED", "", CURLE_USE_SSL_FAILED);
+    vm.makeLocal<VarInt>(loc, "E_SEND_FAIL_REWIND", "", CURLE_SEND_FAIL_REWIND);
+    vm.makeLocal<VarInt>(loc, "E_SSL_ENGINE_INITFAILED", "", CURLE_SSL_ENGINE_INITFAILED);
+    vm.makeLocal<VarInt>(loc, "E_LOGIN_DENIED", "", CURLE_LOGIN_DENIED);
+    vm.makeLocal<VarInt>(loc, "E_TFTP_NOTFOUND", "", CURLE_TFTP_NOTFOUND);
+    vm.makeLocal<VarInt>(loc, "E_TFTP_PERM", "", CURLE_TFTP_PERM);
+    vm.makeLocal<VarInt>(loc, "E_REMOTE_DISK_FULL", "", CURLE_REMOTE_DISK_FULL);
+    vm.makeLocal<VarInt>(loc, "E_TFTP_ILLEGAL", "", CURLE_TFTP_ILLEGAL);
+    vm.makeLocal<VarInt>(loc, "E_TFTP_UNKNOWNID", "", CURLE_TFTP_UNKNOWNID);
+    vm.makeLocal<VarInt>(loc, "E_REMOTE_FILE_EXISTS", "", CURLE_REMOTE_FILE_EXISTS);
+    vm.makeLocal<VarInt>(loc, "E_TFTP_NOSUCHUSER", "", CURLE_TFTP_NOSUCHUSER);
+    vm.makeLocal<VarInt>(loc, "E_CONV_FAILED", "", CURLE_CONV_FAILED);
+    vm.makeLocal<VarInt>(loc, "E_CONV_REQD", "", CURLE_CONV_REQD);
+    vm.makeLocal<VarInt>(loc, "E_SSL_CACERT_BADFILE", "", CURLE_SSL_CACERT_BADFILE);
+    vm.makeLocal<VarInt>(loc, "E_REMOTE_FILE_NOT_FOUND", "", CURLE_REMOTE_FILE_NOT_FOUND);
+    vm.makeLocal<VarInt>(loc, "E_SSH", "", CURLE_SSH);
+    vm.makeLocal<VarInt>(loc, "E_SSL_SHUTDOWN_FAILED", "", CURLE_SSL_SHUTDOWN_FAILED);
+    vm.makeLocal<VarInt>(loc, "E_AGAIN", "", CURLE_AGAIN);
+    vm.makeLocal<VarInt>(loc, "E_SSL_CRL_BADFILE", "", CURLE_SSL_CRL_BADFILE);
+    vm.makeLocal<VarInt>(loc, "E_SSL_ISSUER_ERROR", "", CURLE_SSL_ISSUER_ERROR);
+    vm.makeLocal<VarInt>(loc, "E_FTP_PRET_FAILED", "", CURLE_FTP_PRET_FAILED);
+    vm.makeLocal<VarInt>(loc, "E_RTSP_CSEQ_ERROR", "", CURLE_RTSP_CSEQ_ERROR);
+    vm.makeLocal<VarInt>(loc, "E_RTSP_SESSION_ERROR", "", CURLE_RTSP_SESSION_ERROR);
+    vm.makeLocal<VarInt>(loc, "E_FTP_BAD_FILE_LIST", "", CURLE_FTP_BAD_FILE_LIST);
+    vm.makeLocal<VarInt>(loc, "E_CHUNK_FAILED", "", CURLE_CHUNK_FAILED);
+    vm.makeLocal<VarInt>(loc, "E_NO_CONNECTION_AVAILABLE", "", CURLE_NO_CONNECTION_AVAILABLE);
+    vm.makeLocal<VarInt>(loc, "E_SSL_PINNEDPUBKEYNOTMATCH", "", CURLE_SSL_PINNEDPUBKEYNOTMATCH);
+    vm.makeLocal<VarInt>(loc, "E_SSL_INVALIDCERTSTATUS", "", CURLE_SSL_INVALIDCERTSTATUS);
 #if CURL_AT_LEAST_VERSION(7, 50, 2)
-    mod->addNativeVar(vm, "E_HTTP2_STREAM", "", vm.makeVar<VarInt>(loc, CURLE_HTTP2_STREAM));
+    vm.makeLocal<VarInt>(loc, "E_HTTP2_STREAM", "", CURLE_HTTP2_STREAM);
 #endif
 #if CURL_AT_LEAST_VERSION(7, 59, 0)
-    mod->addNativeVar(vm, "E_RECURSIVE_API_CALL", "",
-                      vm.makeVar<VarInt>(loc, CURLE_RECURSIVE_API_CALL));
+    vm.makeLocal<VarInt>(loc, "E_RECURSIVE_API_CALL", "", CURLE_RECURSIVE_API_CALL);
 #endif
 #if CURL_AT_LEAST_VERSION(7, 66, 0)
-    mod->addNativeVar(vm, "E_AUTH_ERROR", "", vm.makeVar<VarInt>(loc, CURLE_AUTH_ERROR));
+    vm.makeLocal<VarInt>(loc, "E_AUTH_ERROR", "", CURLE_AUTH_ERROR);
 #endif
 #if CURL_AT_LEAST_VERSION(7, 68, 0)
-    mod->addNativeVar(vm, "E_HTTP3", "", vm.makeVar<VarInt>(loc, CURLE_HTTP3));
+    vm.makeLocal<VarInt>(loc, "E_HTTP3", "", CURLE_HTTP3);
 #endif
 #if CURL_AT_LEAST_VERSION(7, 69, 0)
-    mod->addNativeVar(vm, "E_QUIC_CONNECT_ERROR", "",
-                      vm.makeVar<VarInt>(loc, CURLE_QUIC_CONNECT_ERROR));
+    vm.makeLocal<VarInt>(loc, "E_QUIC_CONNECT_ERROR", "", CURLE_QUIC_CONNECT_ERROR);
 #endif
 
     // CURLMcode
-    mod->addNativeVar(vm, "M_CALL_MULTI_PERFORM", "",
-                      vm.makeVar<VarInt>(loc, CURLM_CALL_MULTI_PERFORM));
-    mod->addNativeVar(vm, "M_OK", "", vm.makeVar<VarInt>(loc, CURLM_OK));
-    mod->addNativeVar(vm, "M_BAD_HANDLE", "", vm.makeVar<VarInt>(loc, CURLM_BAD_HANDLE));
-    mod->addNativeVar(vm, "M_BAD_EASY_HANDLE", "", vm.makeVar<VarInt>(loc, CURLM_BAD_EASY_HANDLE));
-    mod->addNativeVar(vm, "M_OUT_OF_MEMORY", "", vm.makeVar<VarInt>(loc, CURLM_OUT_OF_MEMORY));
-    mod->addNativeVar(vm, "M_INTERNAL_ERROR", "", vm.makeVar<VarInt>(loc, CURLM_INTERNAL_ERROR));
-    mod->addNativeVar(vm, "M_BAD_SOCKET", "", vm.makeVar<VarInt>(loc, CURLM_BAD_SOCKET));
-    mod->addNativeVar(vm, "M_UNKNOWN_OPTION", "", vm.makeVar<VarInt>(loc, CURLM_UNKNOWN_OPTION));
-    mod->addNativeVar(vm, "M_ADDED_ALREADY", "", vm.makeVar<VarInt>(loc, CURLM_ADDED_ALREADY));
+    vm.makeLocal<VarInt>(loc, "M_CALL_MULTI_PERFORM", "", CURLM_CALL_MULTI_PERFORM);
+    vm.makeLocal<VarInt>(loc, "M_OK", "", CURLM_OK);
+    vm.makeLocal<VarInt>(loc, "M_BAD_HANDLE", "", CURLM_BAD_HANDLE);
+    vm.makeLocal<VarInt>(loc, "M_BAD_EASY_HANDLE", "", CURLM_BAD_EASY_HANDLE);
+    vm.makeLocal<VarInt>(loc, "M_OUT_OF_MEMORY", "", CURLM_OUT_OF_MEMORY);
+    vm.makeLocal<VarInt>(loc, "M_INTERNAL_ERROR", "", CURLM_INTERNAL_ERROR);
+    vm.makeLocal<VarInt>(loc, "M_BAD_SOCKET", "", CURLM_BAD_SOCKET);
+    vm.makeLocal<VarInt>(loc, "M_UNKNOWN_OPTION", "", CURLM_UNKNOWN_OPTION);
+    vm.makeLocal<VarInt>(loc, "M_ADDED_ALREADY", "", CURLM_ADDED_ALREADY);
 #if CURL_AT_LEAST_VERSION(7, 59, 0)
-    mod->addNativeVar(vm, "M_RECURSIVE_API_CALL", "",
-                      vm.makeVar<VarInt>(loc, CURLM_RECURSIVE_API_CALL));
+    vm.makeLocal<VarInt>(loc, "M_RECURSIVE_API_CALL", "", CURLM_RECURSIVE_API_CALL);
 #endif
 #if CURL_AT_LEAST_VERSION(7, 68, 0)
-    mod->addNativeVar(vm, "WAKEUP_FAILURE", "", vm.makeVar<VarInt>(loc, CURLM_WAKEUP_FAILURE));
+    vm.makeLocal<VarInt>(loc, "WAKEUP_FAILURE", "", CURLM_WAKEUP_FAILURE);
 #endif
 #if CURL_AT_LEAST_VERSION(7, 69, 0)
-    mod->addNativeVar(vm, "BAD_FUNCTION_ARGUMENT", "",
-                      vm.makeVar<VarInt>(loc, CURLM_BAD_FUNCTION_ARGUMENT));
+    vm.makeLocal<VarInt>(loc, "BAD_FUNCTION_ARGUMENT", "", CURLM_BAD_FUNCTION_ARGUMENT);
 #endif
 
     // CURLSHcode
-    mod->addNativeVar(vm, "SHE_OK", "", vm.makeVar<VarInt>(loc, CURLSHE_OK));
-    mod->addNativeVar(vm, "SHE_BAD_OPTION", "", vm.makeVar<VarInt>(loc, CURLSHE_BAD_OPTION));
-    mod->addNativeVar(vm, "SHE_IN_USE", "", vm.makeVar<VarInt>(loc, CURLSHE_IN_USE));
-    mod->addNativeVar(vm, "SHE_INVALID", "", vm.makeVar<VarInt>(loc, CURLSHE_INVALID));
-    mod->addNativeVar(vm, "SHE_NOMEM", "", vm.makeVar<VarInt>(loc, CURLSHE_NOMEM));
-    mod->addNativeVar(vm, "SHE_NOT_BUILT_IN", "", vm.makeVar<VarInt>(loc, CURLSHE_NOT_BUILT_IN));
+    vm.makeLocal<VarInt>(loc, "SHE_OK", "", CURLSHE_OK);
+    vm.makeLocal<VarInt>(loc, "SHE_BAD_OPTION", "", CURLSHE_BAD_OPTION);
+    vm.makeLocal<VarInt>(loc, "SHE_IN_USE", "", CURLSHE_IN_USE);
+    vm.makeLocal<VarInt>(loc, "SHE_INVALID", "", CURLSHE_INVALID);
+    vm.makeLocal<VarInt>(loc, "SHE_NOMEM", "", CURLSHE_NOMEM);
+    vm.makeLocal<VarInt>(loc, "SHE_NOT_BUILT_IN", "", CURLSHE_NOT_BUILT_IN);
 
 #if CURL_AT_LEAST_VERSION(7, 62, 0)
     // CURLUcode
-    mod->addNativeVar(vm, "UE_OK", "", vm.makeVar<VarInt>(loc, CURLUE_OK));
-    mod->addNativeVar(vm, "UE_BAD_HANDLE", "", vm.makeVar<VarInt>(loc, CURLUE_BAD_HANDLE));
-    mod->addNativeVar(vm, "UE_BAD_PARTPOINTER", "",
-                      vm.makeVar<VarInt>(loc, CURLUE_BAD_PARTPOINTER));
-    mod->addNativeVar(vm, "UE_MALFORMED_INPUT", "",
-                      vm.makeVar<VarInt>(loc, CURLUE_MALFORMED_INPUT));
-    mod->addNativeVar(vm, "UE_BAD_PORT_NUMBER", "",
-                      vm.makeVar<VarInt>(loc, CURLUE_BAD_PORT_NUMBER));
-    mod->addNativeVar(vm, "UE_UNSUPPORTED_SCHEME", "",
-                      vm.makeVar<VarInt>(loc, CURLUE_UNSUPPORTED_SCHEME));
-    mod->addNativeVar(vm, "UE_URLDECODE", "", vm.makeVar<VarInt>(loc, CURLUE_URLDECODE));
-    mod->addNativeVar(vm, "UE_OUT_OF_MEMORY", "", vm.makeVar<VarInt>(loc, CURLUE_OUT_OF_MEMORY));
-    mod->addNativeVar(vm, "UE_USER_NOT_ALLOWED", "",
-                      vm.makeVar<VarInt>(loc, CURLUE_USER_NOT_ALLOWED));
-    mod->addNativeVar(vm, "UE_UNKNOWN_PART", "", vm.makeVar<VarInt>(loc, CURLUE_UNKNOWN_PART));
-    mod->addNativeVar(vm, "UE_NO_SCHEME", "", vm.makeVar<VarInt>(loc, CURLUE_NO_SCHEME));
-    mod->addNativeVar(vm, "UE_NO_USER", "", vm.makeVar<VarInt>(loc, CURLUE_NO_USER));
-    mod->addNativeVar(vm, "UE_NO_PASSWORD", "", vm.makeVar<VarInt>(loc, CURLUE_NO_PASSWORD));
-    mod->addNativeVar(vm, "UE_NO_OPTIONS", "", vm.makeVar<VarInt>(loc, CURLUE_NO_OPTIONS));
-    mod->addNativeVar(vm, "UE_NO_HOST", "", vm.makeVar<VarInt>(loc, CURLUE_NO_HOST));
-    mod->addNativeVar(vm, "UE_NO_PORT", "", vm.makeVar<VarInt>(loc, CURLUE_NO_PORT));
-    mod->addNativeVar(vm, "UE_NO_QUERY", "", vm.makeVar<VarInt>(loc, CURLUE_NO_QUERY));
-    mod->addNativeVar(vm, "UE_NO_FRAGMENT", "", vm.makeVar<VarInt>(loc, CURLUE_NO_FRAGMENT));
+    vm.makeLocal<VarInt>(loc, "UE_OK", "", CURLUE_OK);
+    vm.makeLocal<VarInt>(loc, "UE_BAD_HANDLE", "", CURLUE_BAD_HANDLE);
+    vm.makeLocal<VarInt>(loc, "UE_BAD_PARTPOINTER", "", CURLUE_BAD_PARTPOINTER);
+    vm.makeLocal<VarInt>(loc, "UE_MALFORMED_INPUT", "", CURLUE_MALFORMED_INPUT);
+    vm.makeLocal<VarInt>(loc, "UE_BAD_PORT_NUMBER", "", CURLUE_BAD_PORT_NUMBER);
+    vm.makeLocal<VarInt>(loc, "UE_UNSUPPORTED_SCHEME", "", CURLUE_UNSUPPORTED_SCHEME);
+    vm.makeLocal<VarInt>(loc, "UE_URLDECODE", "", CURLUE_URLDECODE);
+    vm.makeLocal<VarInt>(loc, "UE_OUT_OF_MEMORY", "", CURLUE_OUT_OF_MEMORY);
+    vm.makeLocal<VarInt>(loc, "UE_USER_NOT_ALLOWED", "", CURLUE_USER_NOT_ALLOWED);
+    vm.makeLocal<VarInt>(loc, "UE_UNKNOWN_PART", "", CURLUE_UNKNOWN_PART);
+    vm.makeLocal<VarInt>(loc, "UE_NO_SCHEME", "", CURLUE_NO_SCHEME);
+    vm.makeLocal<VarInt>(loc, "UE_NO_USER", "", CURLUE_NO_USER);
+    vm.makeLocal<VarInt>(loc, "UE_NO_PASSWORD", "", CURLUE_NO_PASSWORD);
+    vm.makeLocal<VarInt>(loc, "UE_NO_OPTIONS", "", CURLUE_NO_OPTIONS);
+    vm.makeLocal<VarInt>(loc, "UE_NO_HOST", "", CURLUE_NO_HOST);
+    vm.makeLocal<VarInt>(loc, "UE_NO_PORT", "", CURLUE_NO_PORT);
+    vm.makeLocal<VarInt>(loc, "UE_NO_QUERY", "", CURLUE_NO_QUERY);
+    vm.makeLocal<VarInt>(loc, "UE_NO_FRAGMENT", "", CURLUE_NO_FRAGMENT);
 #endif
 
     // EASY_OPTS
 
     // BEHAVIOR OPTIONS
-    mod->addNativeVar(vm, "OPT_VERBOSE", "", vm.makeVar<VarInt>(loc, CURLOPT_VERBOSE));
-    mod->addNativeVar(vm, "OPT_HEADER", "", vm.makeVar<VarInt>(loc, CURLOPT_HEADER));
-    mod->addNativeVar(vm, "OPT_NOPROGRESS", "", vm.makeVar<VarInt>(loc, CURLOPT_NOPROGRESS));
-    mod->addNativeVar(vm, "OPT_NOSIGNAL", "", vm.makeVar<VarInt>(loc, CURLOPT_NOSIGNAL));
-    mod->addNativeVar(vm, "OPT_WILDCARDMATCH", "", vm.makeVar<VarInt>(loc, CURLOPT_WILDCARDMATCH));
+    vm.makeLocal<VarInt>(loc, "OPT_VERBOSE", "", CURLOPT_VERBOSE);
+    vm.makeLocal<VarInt>(loc, "OPT_HEADER", "", CURLOPT_HEADER);
+    vm.makeLocal<VarInt>(loc, "OPT_NOPROGRESS", "", CURLOPT_NOPROGRESS);
+    vm.makeLocal<VarInt>(loc, "OPT_NOSIGNAL", "", CURLOPT_NOSIGNAL);
+    vm.makeLocal<VarInt>(loc, "OPT_WILDCARDMATCH", "", CURLOPT_WILDCARDMATCH);
 
     // CALLBACK OPTIONS
-    mod->addNativeVar(vm, "OPT_WRITEFUNCTION", "", vm.makeVar<VarInt>(loc, CURLOPT_WRITEFUNCTION));
-    mod->addNativeVar(vm, "OPT_WRITEDATA", "", vm.makeVar<VarInt>(loc, CURLOPT_WRITEDATA));
-    mod->addNativeVar(vm, "OPT_READFUNCTION", "", vm.makeVar<VarInt>(loc, CURLOPT_READFUNCTION));
-    mod->addNativeVar(vm, "OPT_READDATA", "", vm.makeVar<VarInt>(loc, CURLOPT_READDATA));
-    mod->addNativeVar(vm, "OPT_SEEKFUNCTION", "", vm.makeVar<VarInt>(loc, CURLOPT_SEEKFUNCTION));
-    mod->addNativeVar(vm, "OPT_SEEKDATA", "", vm.makeVar<VarInt>(loc, CURLOPT_SEEKDATA));
-    mod->addNativeVar(vm, "OPT_SOCKOPTFUNCTION", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_SOCKOPTFUNCTION));
-    mod->addNativeVar(vm, "OPT_SOCKOPTDATA", "", vm.makeVar<VarInt>(loc, CURLOPT_SOCKOPTDATA));
-    mod->addNativeVar(vm, "OPT_OPENSOCKETFUNCTION", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_OPENSOCKETFUNCTION));
-    mod->addNativeVar(vm, "OPT_OPENSOCKETDATA", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_OPENSOCKETDATA));
-    mod->addNativeVar(vm, "OPT_CLOSESOCKETFUNCTION", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_CLOSESOCKETFUNCTION));
-    mod->addNativeVar(vm, "OPT_CLOSESOCKETDATA", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_CLOSESOCKETDATA));
-    mod->addNativeVar(vm, "OPT_PROGRESSDATA", "", vm.makeVar<VarInt>(loc, CURLOPT_PROGRESSDATA));
-    mod->addNativeVar(vm, "OPT_XFERINFOFUNCTION", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_XFERINFOFUNCTION));
-    mod->addNativeVar(vm, "OPT_XFERINFODATA", "", vm.makeVar<VarInt>(loc, CURLOPT_XFERINFODATA));
-    mod->addNativeVar(vm, "OPT_HEADERFUNCTION", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_HEADERFUNCTION));
-    mod->addNativeVar(vm, "OPT_HEADERDATA", "", vm.makeVar<VarInt>(loc, CURLOPT_HEADERDATA));
-    mod->addNativeVar(vm, "OPT_DEBUGFUNCTION", "", vm.makeVar<VarInt>(loc, CURLOPT_DEBUGFUNCTION));
-    mod->addNativeVar(vm, "OPT_DEBUGDATA", "", vm.makeVar<VarInt>(loc, CURLOPT_DEBUGDATA));
-    mod->addNativeVar(vm, "OPT_SSL_CTX_FUNCTION", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_SSL_CTX_FUNCTION));
-    mod->addNativeVar(vm, "OPT_SSL_CTX_DATA", "", vm.makeVar<VarInt>(loc, CURLOPT_SSL_CTX_DATA));
-    mod->addNativeVar(vm, "OPT_INTERLEAVEFUNCTION", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_INTERLEAVEFUNCTION));
-    mod->addNativeVar(vm, "OPT_INTERLEAVEDATA", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_INTERLEAVEDATA));
-    mod->addNativeVar(vm, "OPT_CHUNK_BGN_FUNCTION", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_CHUNK_BGN_FUNCTION));
-    mod->addNativeVar(vm, "OPT_CHUNK_END_FUNCTION", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_CHUNK_END_FUNCTION));
-    mod->addNativeVar(vm, "OPT_CHUNK_DATA", "", vm.makeVar<VarInt>(loc, CURLOPT_CHUNK_DATA));
-    mod->addNativeVar(vm, "OPT_FNMATCH_FUNCTION", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_FNMATCH_FUNCTION));
-    mod->addNativeVar(vm, "OPT_FNMATCH_DATA", "", vm.makeVar<VarInt>(loc, CURLOPT_FNMATCH_DATA));
+    vm.makeLocal<VarInt>(loc, "OPT_WRITEFUNCTION", "", CURLOPT_WRITEFUNCTION);
+    vm.makeLocal<VarInt>(loc, "OPT_WRITEDATA", "", CURLOPT_WRITEDATA);
+    vm.makeLocal<VarInt>(loc, "OPT_READFUNCTION", "", CURLOPT_READFUNCTION);
+    vm.makeLocal<VarInt>(loc, "OPT_READDATA", "", CURLOPT_READDATA);
+    vm.makeLocal<VarInt>(loc, "OPT_SEEKFUNCTION", "", CURLOPT_SEEKFUNCTION);
+    vm.makeLocal<VarInt>(loc, "OPT_SEEKDATA", "", CURLOPT_SEEKDATA);
+    vm.makeLocal<VarInt>(loc, "OPT_SOCKOPTFUNCTION", "", CURLOPT_SOCKOPTFUNCTION);
+    vm.makeLocal<VarInt>(loc, "OPT_SOCKOPTDATA", "", CURLOPT_SOCKOPTDATA);
+    vm.makeLocal<VarInt>(loc, "OPT_OPENSOCKETFUNCTION", "", CURLOPT_OPENSOCKETFUNCTION);
+    vm.makeLocal<VarInt>(loc, "OPT_OPENSOCKETDATA", "", CURLOPT_OPENSOCKETDATA);
+    vm.makeLocal<VarInt>(loc, "OPT_CLOSESOCKETFUNCTION", "", CURLOPT_CLOSESOCKETFUNCTION);
+    vm.makeLocal<VarInt>(loc, "OPT_CLOSESOCKETDATA", "", CURLOPT_CLOSESOCKETDATA);
+    vm.makeLocal<VarInt>(loc, "OPT_PROGRESSDATA", "", CURLOPT_PROGRESSDATA);
+    vm.makeLocal<VarInt>(loc, "OPT_XFERINFOFUNCTION", "", CURLOPT_XFERINFOFUNCTION);
+    vm.makeLocal<VarInt>(loc, "OPT_XFERINFODATA", "", CURLOPT_XFERINFODATA);
+    vm.makeLocal<VarInt>(loc, "OPT_HEADERFUNCTION", "", CURLOPT_HEADERFUNCTION);
+    vm.makeLocal<VarInt>(loc, "OPT_HEADERDATA", "", CURLOPT_HEADERDATA);
+    vm.makeLocal<VarInt>(loc, "OPT_DEBUGFUNCTION", "", CURLOPT_DEBUGFUNCTION);
+    vm.makeLocal<VarInt>(loc, "OPT_DEBUGDATA", "", CURLOPT_DEBUGDATA);
+    vm.makeLocal<VarInt>(loc, "OPT_SSL_CTX_FUNCTION", "", CURLOPT_SSL_CTX_FUNCTION);
+    vm.makeLocal<VarInt>(loc, "OPT_SSL_CTX_DATA", "", CURLOPT_SSL_CTX_DATA);
+    vm.makeLocal<VarInt>(loc, "OPT_INTERLEAVEFUNCTION", "", CURLOPT_INTERLEAVEFUNCTION);
+    vm.makeLocal<VarInt>(loc, "OPT_INTERLEAVEDATA", "", CURLOPT_INTERLEAVEDATA);
+    vm.makeLocal<VarInt>(loc, "OPT_CHUNK_BGN_FUNCTION", "", CURLOPT_CHUNK_BGN_FUNCTION);
+    vm.makeLocal<VarInt>(loc, "OPT_CHUNK_END_FUNCTION", "", CURLOPT_CHUNK_END_FUNCTION);
+    vm.makeLocal<VarInt>(loc, "OPT_CHUNK_DATA", "", CURLOPT_CHUNK_DATA);
+    vm.makeLocal<VarInt>(loc, "OPT_FNMATCH_FUNCTION", "", CURLOPT_FNMATCH_FUNCTION);
+    vm.makeLocal<VarInt>(loc, "OPT_FNMATCH_DATA", "", CURLOPT_FNMATCH_DATA);
 #if CURL_AT_LEAST_VERSION(7, 54, 0)
-    mod->addNativeVar(vm, "OPT_SUPPRESS_CONNECT_HEADERS", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_SUPPRESS_CONNECT_HEADERS));
+    vm.makeLocal<VarInt>(loc, "OPT_SUPPRESS_CONNECT_HEADERS", "", CURLOPT_SUPPRESS_CONNECT_HEADERS);
 #endif
 #if CURL_AT_LEAST_VERSION(7, 59, 0)
-    mod->addNativeVar(vm, "OPT_RESOLVER_START_FUNCTION", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_RESOLVER_START_FUNCTION));
-    mod->addNativeVar(vm, "OPT_RESOLVER_START_DATA", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_RESOLVER_START_DATA));
+    vm.makeLocal<VarInt>(loc, "OPT_RESOLVER_START_FUNCTION", "", CURLOPT_RESOLVER_START_FUNCTION);
+    vm.makeLocal<VarInt>(loc, "OPT_RESOLVER_START_DATA", "", CURLOPT_RESOLVER_START_DATA);
 #endif
 
     // ERROR OPTIONS
-    mod->addNativeVar(vm, "OPT_ERRORBUFFER", "", vm.makeVar<VarInt>(loc, CURLOPT_ERRORBUFFER));
-    mod->addNativeVar(vm, "OPT_STDERR", "", vm.makeVar<VarInt>(loc, CURLOPT_STDERR));
-    mod->addNativeVar(vm, "OPT_FAILONERROR", "", vm.makeVar<VarInt>(loc, CURLOPT_FAILONERROR));
+    vm.makeLocal<VarInt>(loc, "OPT_ERRORBUFFER", "", CURLOPT_ERRORBUFFER);
+    vm.makeLocal<VarInt>(loc, "OPT_STDERR", "", CURLOPT_STDERR);
+    vm.makeLocal<VarInt>(loc, "OPT_FAILONERROR", "", CURLOPT_FAILONERROR);
 #if CURL_AT_LEAST_VERSION(7, 51, 0)
-    mod->addNativeVar(vm, "OPT_KEEP_SENDING_ON_ERROR", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_KEEP_SENDING_ON_ERROR));
+    vm.makeLocal<VarInt>(loc, "OPT_KEEP_SENDING_ON_ERROR", "", CURLOPT_KEEP_SENDING_ON_ERROR);
 #endif
 
     // NETWORK OPTIONS
-    mod->addNativeVar(vm, "OPT_URL", "", vm.makeVar<VarInt>(loc, CURLOPT_URL));
-    mod->addNativeVar(vm, "OPT_PATH_AS_IS", "", vm.makeVar<VarInt>(loc, CURLOPT_PATH_AS_IS));
-    mod->addNativeVar(vm, "OPT_PROTOCOLS_STR", "", vm.makeVar<VarInt>(loc, CURLOPT_PROTOCOLS_STR));
-    mod->addNativeVar(vm, "OPT_REDIR_PROTOCOLS_STR", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_REDIR_PROTOCOLS_STR));
-    mod->addNativeVar(vm, "OPT_DEFAULT_PROTOCOL", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_DEFAULT_PROTOCOL));
-    mod->addNativeVar(vm, "OPT_PROXY", "", vm.makeVar<VarInt>(loc, CURLOPT_PROXY));
+    vm.makeLocal<VarInt>(loc, "OPT_URL", "", CURLOPT_URL);
+    vm.makeLocal<VarInt>(loc, "OPT_PATH_AS_IS", "", CURLOPT_PATH_AS_IS);
+    vm.makeLocal<VarInt>(loc, "OPT_PROTOCOLS_STR", "", CURLOPT_PROTOCOLS_STR);
+    vm.makeLocal<VarInt>(loc, "OPT_REDIR_PROTOCOLS_STR", "", CURLOPT_REDIR_PROTOCOLS_STR);
+    vm.makeLocal<VarInt>(loc, "OPT_DEFAULT_PROTOCOL", "", CURLOPT_DEFAULT_PROTOCOL);
+    vm.makeLocal<VarInt>(loc, "OPT_PROXY", "", CURLOPT_PROXY);
 #if CURL_AT_LEAST_VERSION(7, 52, 0)
-    mod->addNativeVar(vm, "OPT_PRE_PROXY", "", vm.makeVar<VarInt>(loc, CURLOPT_PRE_PROXY));
+    vm.makeLocal<VarInt>(loc, "OPT_PRE_PROXY", "", CURLOPT_PRE_PROXY);
 #endif
-    mod->addNativeVar(vm, "OPT_PROXYPORT", "", vm.makeVar<VarInt>(loc, CURLOPT_PROXYPORT));
-    mod->addNativeVar(vm, "OPT_PROXYTYPE", "", vm.makeVar<VarInt>(loc, CURLOPT_PROXYTYPE));
-    mod->addNativeVar(vm, "OPT_NOPROXY", "", vm.makeVar<VarInt>(loc, CURLOPT_NOPROXY));
-    mod->addNativeVar(vm, "OPT_HTTPPROXYTUNNEL", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_HTTPPROXYTUNNEL));
+    vm.makeLocal<VarInt>(loc, "OPT_PROXYPORT", "", CURLOPT_PROXYPORT);
+    vm.makeLocal<VarInt>(loc, "OPT_PROXYTYPE", "", CURLOPT_PROXYTYPE);
+    vm.makeLocal<VarInt>(loc, "OPT_NOPROXY", "", CURLOPT_NOPROXY);
+    vm.makeLocal<VarInt>(loc, "OPT_HTTPPROXYTUNNEL", "", CURLOPT_HTTPPROXYTUNNEL);
 #if CURL_AT_LEAST_VERSION(7, 49, 0)
-    mod->addNativeVar(vm, "OPT_CONNECT_TO", "", vm.makeVar<VarInt>(loc, CURLOPT_CONNECT_TO));
+    vm.makeLocal<VarInt>(loc, "OPT_CONNECT_TO", "", CURLOPT_CONNECT_TO);
 #endif
 #if CURL_AT_LEAST_VERSION(7, 55, 0)
-    mod->addNativeVar(vm, "OPT_SOCKS5_AUTH", "", vm.makeVar<VarInt>(loc, CURLOPT_SOCKS5_AUTH));
+    vm.makeLocal<VarInt>(loc, "OPT_SOCKS5_AUTH", "", CURLOPT_SOCKS5_AUTH);
 #endif
-    mod->addNativeVar(vm, "OPT_SOCKS5_GSSAPI_NEC", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_SOCKS5_GSSAPI_NEC));
-    mod->addNativeVar(vm, "OPT_PROXY_SERVICE_NAME", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_PROXY_SERVICE_NAME));
+    vm.makeLocal<VarInt>(loc, "OPT_SOCKS5_GSSAPI_NEC", "", CURLOPT_SOCKS5_GSSAPI_NEC);
+    vm.makeLocal<VarInt>(loc, "OPT_PROXY_SERVICE_NAME", "", CURLOPT_PROXY_SERVICE_NAME);
 #if CURL_AT_LEAST_VERSION(7, 60, 0)
-    mod->addNativeVar(vm, "OPT_HAPROXYPROTOCOL", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_HAPROXYPROTOCOL));
+    vm.makeLocal<VarInt>(loc, "OPT_HAPROXYPROTOCOL", "", CURLOPT_HAPROXYPROTOCOL);
 #endif
-    mod->addNativeVar(vm, "OPT_SERVICE_NAME", "", vm.makeVar<VarInt>(loc, CURLOPT_SERVICE_NAME));
-    mod->addNativeVar(vm, "OPT_INTERFACE", "", vm.makeVar<VarInt>(loc, CURLOPT_INTERFACE));
-    mod->addNativeVar(vm, "OPT_LOCALPORT", "", vm.makeVar<VarInt>(loc, CURLOPT_LOCALPORT));
-    mod->addNativeVar(vm, "OPT_LOCALPORTRANGE", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_LOCALPORTRANGE));
-    mod->addNativeVar(vm, "OPT_DNS_CACHE_TIMEOUT", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_DNS_CACHE_TIMEOUT));
+    vm.makeLocal<VarInt>(loc, "OPT_SERVICE_NAME", "", CURLOPT_SERVICE_NAME);
+    vm.makeLocal<VarInt>(loc, "OPT_INTERFACE", "", CURLOPT_INTERFACE);
+    vm.makeLocal<VarInt>(loc, "OPT_LOCALPORT", "", CURLOPT_LOCALPORT);
+    vm.makeLocal<VarInt>(loc, "OPT_LOCALPORTRANGE", "", CURLOPT_LOCALPORTRANGE);
+    vm.makeLocal<VarInt>(loc, "OPT_DNS_CACHE_TIMEOUT", "", CURLOPT_DNS_CACHE_TIMEOUT);
 #if CURL_AT_LEAST_VERSION(7, 62, 0)
-    mod->addNativeVar(vm, "OPT_DOH_URL", "", vm.makeVar<VarInt>(loc, CURLOPT_DOH_URL));
+    vm.makeLocal<VarInt>(loc, "OPT_DOH_URL", "", CURLOPT_DOH_URL);
 #endif
-    mod->addNativeVar(vm, "OPT_BUFFERSIZE", "", vm.makeVar<VarInt>(loc, CURLOPT_BUFFERSIZE));
-    mod->addNativeVar(vm, "OPT_PORT", "", vm.makeVar<VarInt>(loc, CURLOPT_PORT));
+    vm.makeLocal<VarInt>(loc, "OPT_BUFFERSIZE", "", CURLOPT_BUFFERSIZE);
+    vm.makeLocal<VarInt>(loc, "OPT_PORT", "", CURLOPT_PORT);
 #if CURL_AT_LEAST_VERSION(7, 49, 0)
-    mod->addNativeVar(vm, "OPT_TCP_FASTOPEN", "", vm.makeVar<VarInt>(loc, CURLOPT_TCP_FASTOPEN));
+    vm.makeLocal<VarInt>(loc, "OPT_TCP_FASTOPEN", "", CURLOPT_TCP_FASTOPEN);
 #endif
-    mod->addNativeVar(vm, "OPT_TCP_NODELAY", "", vm.makeVar<VarInt>(loc, CURLOPT_TCP_NODELAY));
-    mod->addNativeVar(vm, "OPT_ADDRESS_SCOPE", "", vm.makeVar<VarInt>(loc, CURLOPT_ADDRESS_SCOPE));
-    mod->addNativeVar(vm, "OPT_TCP_KEEPALIVE", "", vm.makeVar<VarInt>(loc, CURLOPT_TCP_KEEPALIVE));
-    mod->addNativeVar(vm, "OPT_TCP_KEEPIDLE", "", vm.makeVar<VarInt>(loc, CURLOPT_TCP_KEEPIDLE));
-    mod->addNativeVar(vm, "OPT_TCP_KEEPINTVL", "", vm.makeVar<VarInt>(loc, CURLOPT_TCP_KEEPINTVL));
-    mod->addNativeVar(vm, "OPT_UNIX_SOCKET_PATH", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_UNIX_SOCKET_PATH));
+    vm.makeLocal<VarInt>(loc, "OPT_TCP_NODELAY", "", CURLOPT_TCP_NODELAY);
+    vm.makeLocal<VarInt>(loc, "OPT_ADDRESS_SCOPE", "", CURLOPT_ADDRESS_SCOPE);
+    vm.makeLocal<VarInt>(loc, "OPT_TCP_KEEPALIVE", "", CURLOPT_TCP_KEEPALIVE);
+    vm.makeLocal<VarInt>(loc, "OPT_TCP_KEEPIDLE", "", CURLOPT_TCP_KEEPIDLE);
+    vm.makeLocal<VarInt>(loc, "OPT_TCP_KEEPINTVL", "", CURLOPT_TCP_KEEPINTVL);
+    vm.makeLocal<VarInt>(loc, "OPT_UNIX_SOCKET_PATH", "", CURLOPT_UNIX_SOCKET_PATH);
 #if CURL_AT_LEAST_VERSION(7, 53, 0)
-    mod->addNativeVar(vm, "OPT_ABSTRACT_UNIX_SOCKET", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_ABSTRACT_UNIX_SOCKET));
+    vm.makeLocal<VarInt>(loc, "OPT_ABSTRACT_UNIX_SOCKET", "", CURLOPT_ABSTRACT_UNIX_SOCKET);
 #endif
 
     // NAMES and PASSWORDS OPTIONS (Authentication)
-    mod->addNativeVar(vm, "OPT_NETRC", "", vm.makeVar<VarInt>(loc, CURLOPT_NETRC));
-    mod->addNativeVar(vm, "OPT_NETRC_FILE", "", vm.makeVar<VarInt>(loc, CURLOPT_NETRC_FILE));
-    mod->addNativeVar(vm, "OPT_USERPWD", "", vm.makeVar<VarInt>(loc, CURLOPT_USERPWD));
-    mod->addNativeVar(vm, "OPT_PROXYUSERPWD", "", vm.makeVar<VarInt>(loc, CURLOPT_PROXYUSERPWD));
-    mod->addNativeVar(vm, "OPT_USERNAME", "", vm.makeVar<VarInt>(loc, CURLOPT_USERNAME));
-    mod->addNativeVar(vm, "OPT_PASSWORD", "", vm.makeVar<VarInt>(loc, CURLOPT_PASSWORD));
-    mod->addNativeVar(vm, "OPT_LOGIN_OPTIONS", "", vm.makeVar<VarInt>(loc, CURLOPT_LOGIN_OPTIONS));
-    mod->addNativeVar(vm, "OPT_PROXYUSERNAME", "", vm.makeVar<VarInt>(loc, CURLOPT_PROXYUSERNAME));
-    mod->addNativeVar(vm, "OPT_PROXYPASSWORD", "", vm.makeVar<VarInt>(loc, CURLOPT_PROXYPASSWORD));
-    mod->addNativeVar(vm, "OPT_HTTPAUTH", "", vm.makeVar<VarInt>(loc, CURLOPT_HTTPAUTH));
-    mod->addNativeVar(vm, "OPT_TLSAUTH_USERNAME", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_TLSAUTH_USERNAME));
-    mod->addNativeVar(vm, "OPT_TLSAUTH_PASSWORD", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_TLSAUTH_PASSWORD));
-    mod->addNativeVar(vm, "OPT_TLSAUTH_TYPE", "", vm.makeVar<VarInt>(loc, CURLOPT_TLSAUTH_TYPE));
+    vm.makeLocal<VarInt>(loc, "OPT_NETRC", "", CURLOPT_NETRC);
+    vm.makeLocal<VarInt>(loc, "OPT_NETRC_FILE", "", CURLOPT_NETRC_FILE);
+    vm.makeLocal<VarInt>(loc, "OPT_USERPWD", "", CURLOPT_USERPWD);
+    vm.makeLocal<VarInt>(loc, "OPT_PROXYUSERPWD", "", CURLOPT_PROXYUSERPWD);
+    vm.makeLocal<VarInt>(loc, "OPT_USERNAME", "", CURLOPT_USERNAME);
+    vm.makeLocal<VarInt>(loc, "OPT_PASSWORD", "", CURLOPT_PASSWORD);
+    vm.makeLocal<VarInt>(loc, "OPT_LOGIN_OPTIONS", "", CURLOPT_LOGIN_OPTIONS);
+    vm.makeLocal<VarInt>(loc, "OPT_PROXYUSERNAME", "", CURLOPT_PROXYUSERNAME);
+    vm.makeLocal<VarInt>(loc, "OPT_PROXYPASSWORD", "", CURLOPT_PROXYPASSWORD);
+    vm.makeLocal<VarInt>(loc, "OPT_HTTPAUTH", "", CURLOPT_HTTPAUTH);
+    vm.makeLocal<VarInt>(loc, "OPT_TLSAUTH_USERNAME", "", CURLOPT_TLSAUTH_USERNAME);
+    vm.makeLocal<VarInt>(loc, "OPT_TLSAUTH_PASSWORD", "", CURLOPT_TLSAUTH_PASSWORD);
+    vm.makeLocal<VarInt>(loc, "OPT_TLSAUTH_TYPE", "", CURLOPT_TLSAUTH_TYPE);
 #if CURL_AT_LEAST_VERSION(7, 52, 0)
-    mod->addNativeVar(vm, "OPT_PROXY_TLSAUTH_USERNAME", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_PROXY_TLSAUTH_USERNAME));
-    mod->addNativeVar(vm, "OPT_PROXY_TLSAUTH_PASSWORD", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_PROXY_TLSAUTH_PASSWORD));
-    mod->addNativeVar(vm, "OPT_PROXY_TLSAUTH_TYPE", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_PROXY_TLSAUTH_TYPE));
+    vm.makeLocal<VarInt>(loc, "OPT_PROXY_TLSAUTH_USERNAME", "", CURLOPT_PROXY_TLSAUTH_USERNAME);
+    vm.makeLocal<VarInt>(loc, "OPT_PROXY_TLSAUTH_PASSWORD", "", CURLOPT_PROXY_TLSAUTH_PASSWORD);
+    vm.makeLocal<VarInt>(loc, "OPT_PROXY_TLSAUTH_TYPE", "", CURLOPT_PROXY_TLSAUTH_TYPE);
 #endif
-    mod->addNativeVar(vm, "OPT_PROXYAUTH", "", vm.makeVar<VarInt>(loc, CURLOPT_PROXYAUTH));
+    vm.makeLocal<VarInt>(loc, "OPT_PROXYAUTH", "", CURLOPT_PROXYAUTH);
 #if CURL_AT_LEAST_VERSION(7, 66, 0)
-    mod->addNativeVar(vm, "OPT_SASL_AUTHZID", "", vm.makeVar<VarInt>(loc, CURLOPT_SASL_AUTHZID));
+    vm.makeLocal<VarInt>(loc, "OPT_SASL_AUTHZID", "", CURLOPT_SASL_AUTHZID);
 #endif
 #if CURL_AT_LEAST_VERSION(7, 61, 0)
-    mod->addNativeVar(vm, "OPT_SASL_IR", "", vm.makeVar<VarInt>(loc, CURLOPT_SASL_IR));
-    mod->addNativeVar(vm, "OPT_DISALLOW_USERNAME_IN_URL", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_DISALLOW_USERNAME_IN_URL));
+    vm.makeLocal<VarInt>(loc, "OPT_SASL_IR", "", CURLOPT_SASL_IR);
+    vm.makeLocal<VarInt>(loc, "OPT_DISALLOW_USERNAME_IN_URL", "", CURLOPT_DISALLOW_USERNAME_IN_URL);
 #endif
-    mod->addNativeVar(vm, "OPT_XOAUTH2_BEARER", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_XOAUTH2_BEARER));
+    vm.makeLocal<VarInt>(loc, "OPT_XOAUTH2_BEARER", "", CURLOPT_XOAUTH2_BEARER);
 
     // HTTP OPTIONS
-    mod->addNativeVar(vm, "OPT_AUTOREFERER", "", vm.makeVar<VarInt>(loc, CURLOPT_AUTOREFERER));
-    mod->addNativeVar(vm, "OPT_ACCEPT_ENCODING", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_ACCEPT_ENCODING));
-    mod->addNativeVar(vm, "OPT_TRANSFER_ENCODING", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_TRANSFER_ENCODING));
-    mod->addNativeVar(vm, "OPT_FOLLOWLOCATION", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_FOLLOWLOCATION));
-    mod->addNativeVar(vm, "OPT_UNRESTRICTED_AUTH", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_UNRESTRICTED_AUTH));
-    mod->addNativeVar(vm, "OPT_MAXREDIRS", "", vm.makeVar<VarInt>(loc, CURLOPT_MAXREDIRS));
-    mod->addNativeVar(vm, "OPT_POSTREDIR", "", vm.makeVar<VarInt>(loc, CURLOPT_POSTREDIR));
-    mod->addNativeVar(vm, "OPT_POST", "", vm.makeVar<VarInt>(loc, CURLOPT_POST));
-    mod->addNativeVar(vm, "OPT_POSTFIELDS", "", vm.makeVar<VarInt>(loc, CURLOPT_POSTFIELDS));
-    mod->addNativeVar(vm, "OPT_POSTFIELDSIZE", "", vm.makeVar<VarInt>(loc, CURLOPT_POSTFIELDSIZE));
-    mod->addNativeVar(vm, "OPT_POSTFIELDSIZE_LARGE", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_POSTFIELDSIZE_LARGE));
-    mod->addNativeVar(vm, "OPT_COPYPOSTFIELDS", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_COPYPOSTFIELDS));
-    mod->addNativeVar(vm, "OPT_REFERER", "", vm.makeVar<VarInt>(loc, CURLOPT_REFERER));
-    mod->addNativeVar(vm, "OPT_USERAGENT", "", vm.makeVar<VarInt>(loc, CURLOPT_USERAGENT));
-    mod->addNativeVar(vm, "OPT_HTTPHEADER", "", vm.makeVar<VarInt>(loc, CURLOPT_HTTPHEADER));
-    mod->addNativeVar(vm, "OPT_HEADEROPT", "", vm.makeVar<VarInt>(loc, CURLOPT_HEADEROPT));
-    mod->addNativeVar(vm, "OPT_PROXYHEADER", "", vm.makeVar<VarInt>(loc, CURLOPT_PROXYHEADER));
-    mod->addNativeVar(vm, "OPT_HTTP200ALIASES", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_HTTP200ALIASES));
-    mod->addNativeVar(vm, "OPT_COOKIE", "", vm.makeVar<VarInt>(loc, CURLOPT_COOKIE));
-    mod->addNativeVar(vm, "OPT_COOKIEFILE", "", vm.makeVar<VarInt>(loc, CURLOPT_COOKIEFILE));
-    mod->addNativeVar(vm, "OPT_COOKIEJAR", "", vm.makeVar<VarInt>(loc, CURLOPT_COOKIEJAR));
-    mod->addNativeVar(vm, "OPT_COOKIESESSION", "", vm.makeVar<VarInt>(loc, CURLOPT_COOKIESESSION));
-    mod->addNativeVar(vm, "OPT_COOKIELIST", "", vm.makeVar<VarInt>(loc, CURLOPT_COOKIELIST));
+    vm.makeLocal<VarInt>(loc, "OPT_AUTOREFERER", "", CURLOPT_AUTOREFERER);
+    vm.makeLocal<VarInt>(loc, "OPT_ACCEPT_ENCODING", "", CURLOPT_ACCEPT_ENCODING);
+    vm.makeLocal<VarInt>(loc, "OPT_TRANSFER_ENCODING", "", CURLOPT_TRANSFER_ENCODING);
+    vm.makeLocal<VarInt>(loc, "OPT_FOLLOWLOCATION", "", CURLOPT_FOLLOWLOCATION);
+    vm.makeLocal<VarInt>(loc, "OPT_UNRESTRICTED_AUTH", "", CURLOPT_UNRESTRICTED_AUTH);
+    vm.makeLocal<VarInt>(loc, "OPT_MAXREDIRS", "", CURLOPT_MAXREDIRS);
+    vm.makeLocal<VarInt>(loc, "OPT_POSTREDIR", "", CURLOPT_POSTREDIR);
+    vm.makeLocal<VarInt>(loc, "OPT_POST", "", CURLOPT_POST);
+    vm.makeLocal<VarInt>(loc, "OPT_POSTFIELDS", "", CURLOPT_POSTFIELDS);
+    vm.makeLocal<VarInt>(loc, "OPT_POSTFIELDSIZE", "", CURLOPT_POSTFIELDSIZE);
+    vm.makeLocal<VarInt>(loc, "OPT_POSTFIELDSIZE_LARGE", "", CURLOPT_POSTFIELDSIZE_LARGE);
+    vm.makeLocal<VarInt>(loc, "OPT_COPYPOSTFIELDS", "", CURLOPT_COPYPOSTFIELDS);
+    vm.makeLocal<VarInt>(loc, "OPT_REFERER", "", CURLOPT_REFERER);
+    vm.makeLocal<VarInt>(loc, "OPT_USERAGENT", "", CURLOPT_USERAGENT);
+    vm.makeLocal<VarInt>(loc, "OPT_HTTPHEADER", "", CURLOPT_HTTPHEADER);
+    vm.makeLocal<VarInt>(loc, "OPT_HEADEROPT", "", CURLOPT_HEADEROPT);
+    vm.makeLocal<VarInt>(loc, "OPT_PROXYHEADER", "", CURLOPT_PROXYHEADER);
+    vm.makeLocal<VarInt>(loc, "OPT_HTTP200ALIASES", "", CURLOPT_HTTP200ALIASES);
+    vm.makeLocal<VarInt>(loc, "OPT_COOKIE", "", CURLOPT_COOKIE);
+    vm.makeLocal<VarInt>(loc, "OPT_COOKIEFILE", "", CURLOPT_COOKIEFILE);
+    vm.makeLocal<VarInt>(loc, "OPT_COOKIEJAR", "", CURLOPT_COOKIEJAR);
+    vm.makeLocal<VarInt>(loc, "OPT_COOKIESESSION", "", CURLOPT_COOKIESESSION);
+    vm.makeLocal<VarInt>(loc, "OPT_COOKIELIST", "", CURLOPT_COOKIELIST);
 #if CURL_AT_LEAST_VERSION(7, 64, 1)
-    mod->addNativeVar(vm, "OPT_ALTSVC", "", vm.makeVar<VarInt>(loc, CURLOPT_ALTSVC));
-    mod->addNativeVar(vm, "OPT_ALTSVC_CTRL", "", vm.makeVar<VarInt>(loc, CURLOPT_ALTSVC_CTRL));
+    vm.makeLocal<VarInt>(loc, "OPT_ALTSVC", "", CURLOPT_ALTSVC);
+    vm.makeLocal<VarInt>(loc, "OPT_ALTSVC_CTRL", "", CURLOPT_ALTSVC_CTRL);
 #endif
-    mod->addNativeVar(vm, "OPT_HTTPGET", "", vm.makeVar<VarInt>(loc, CURLOPT_HTTPGET));
+    vm.makeLocal<VarInt>(loc, "OPT_HTTPGET", "", CURLOPT_HTTPGET);
 #if CURL_AT_LEAST_VERSION(7, 55, 0)
-    mod->addNativeVar(vm, "OPT_REQUEST_TARGET", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_REQUEST_TARGET));
+    vm.makeLocal<VarInt>(loc, "OPT_REQUEST_TARGET", "", CURLOPT_REQUEST_TARGET);
 #endif
-    mod->addNativeVar(vm, "OPT_HTTP_VERSION", "", vm.makeVar<VarInt>(loc, CURLOPT_HTTP_VERSION));
+    vm.makeLocal<VarInt>(loc, "OPT_HTTP_VERSION", "", CURLOPT_HTTP_VERSION);
 #if CURL_AT_LEAST_VERSION(7, 64, 0)
-    mod->addNativeVar(vm, "OPT_HTTP09_ALLOWED", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_HTTP09_ALLOWED));
-    mod->addNativeVar(vm, "OPT_TRAILERFUNCTION", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_TRAILERFUNCTION));
-    mod->addNativeVar(vm, "OPT_TRAILERDATA", "", vm.makeVar<VarInt>(loc, CURLOPT_TRAILERDATA));
+    vm.makeLocal<VarInt>(loc, "OPT_HTTP09_ALLOWED", "", CURLOPT_HTTP09_ALLOWED);
+    vm.makeLocal<VarInt>(loc, "OPT_TRAILERFUNCTION", "", CURLOPT_TRAILERFUNCTION);
+    vm.makeLocal<VarInt>(loc, "OPT_TRAILERDATA", "", CURLOPT_TRAILERDATA);
 #endif
-    mod->addNativeVar(vm, "OPT_IGNORE_CONTENT_LENGTH", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_IGNORE_CONTENT_LENGTH));
-    mod->addNativeVar(vm, "OPT_HTTP_CONTENT_DECODING", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_HTTP_CONTENT_DECODING));
-    mod->addNativeVar(vm, "OPT_HTTP_TRANSFER_DECODING", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_HTTP_TRANSFER_DECODING));
-    mod->addNativeVar(vm, "OPT_EXPECT_100_TIMEOUT_MS", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_EXPECT_100_TIMEOUT_MS));
-    mod->addNativeVar(vm, "OPT_PIPEWAIT", "", vm.makeVar<VarInt>(loc, CURLOPT_PIPEWAIT));
-    mod->addNativeVar(vm, "OPT_STREAM_DEPENDS", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_STREAM_DEPENDS));
-    mod->addNativeVar(vm, "OPT_STREAM_DEPENDS_E", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_STREAM_DEPENDS_E));
-    mod->addNativeVar(vm, "OPT_STREAM_WEIGHT", "", vm.makeVar<VarInt>(loc, CURLOPT_STREAM_WEIGHT));
+    vm.makeLocal<VarInt>(loc, "OPT_IGNORE_CONTENT_LENGTH", "", CURLOPT_IGNORE_CONTENT_LENGTH);
+    vm.makeLocal<VarInt>(loc, "OPT_HTTP_CONTENT_DECODING", "", CURLOPT_HTTP_CONTENT_DECODING);
+    vm.makeLocal<VarInt>(loc, "OPT_HTTP_TRANSFER_DECODING", "", CURLOPT_HTTP_TRANSFER_DECODING);
+    vm.makeLocal<VarInt>(loc, "OPT_EXPECT_100_TIMEOUT_MS", "", CURLOPT_EXPECT_100_TIMEOUT_MS);
+    vm.makeLocal<VarInt>(loc, "OPT_PIPEWAIT", "", CURLOPT_PIPEWAIT);
+    vm.makeLocal<VarInt>(loc, "OPT_STREAM_DEPENDS", "", CURLOPT_STREAM_DEPENDS);
+    vm.makeLocal<VarInt>(loc, "OPT_STREAM_DEPENDS_E", "", CURLOPT_STREAM_DEPENDS_E);
+    vm.makeLocal<VarInt>(loc, "OPT_STREAM_WEIGHT", "", CURLOPT_STREAM_WEIGHT);
 
     // SMTP OPTIONS
-    mod->addNativeVar(vm, "OPT_MAIL_FROM", "", vm.makeVar<VarInt>(loc, CURLOPT_MAIL_FROM));
-    mod->addNativeVar(vm, "OPT_MAIL_RCPT", "", vm.makeVar<VarInt>(loc, CURLOPT_MAIL_RCPT));
-    mod->addNativeVar(vm, "OPT_MAIL_AUTH", "", vm.makeVar<VarInt>(loc, CURLOPT_MAIL_AUTH));
+    vm.makeLocal<VarInt>(loc, "OPT_MAIL_FROM", "", CURLOPT_MAIL_FROM);
+    vm.makeLocal<VarInt>(loc, "OPT_MAIL_RCPT", "", CURLOPT_MAIL_RCPT);
+    vm.makeLocal<VarInt>(loc, "OPT_MAIL_AUTH", "", CURLOPT_MAIL_AUTH);
 #if CURL_AT_LEAST_VERSION(7, 69, 0)
-    mod->addNativeVar(vm, "OPT_MAIL_RCPT_ALLLOWFAILS", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_MAIL_RCPT_ALLLOWFAILS));
+    vm.makeLocal<VarInt>(loc, "OPT_MAIL_RCPT_ALLLOWFAILS", "", CURLOPT_MAIL_RCPT_ALLLOWFAILS);
 #endif
 
     // TFTP OPTIONS
-    mod->addNativeVar(vm, "OPT_TFTP_BLKSIZE", "", vm.makeVar<VarInt>(loc, CURLOPT_TFTP_BLKSIZE));
+    vm.makeLocal<VarInt>(loc, "OPT_TFTP_BLKSIZE", "", CURLOPT_TFTP_BLKSIZE);
 #if CURL_AT_LEAST_VERSION(7, 48, 0)
-    mod->addNativeVar(vm, "OPT_TFTP_NO_OPTIONS", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_TFTP_NO_OPTIONS));
+    vm.makeLocal<VarInt>(loc, "OPT_TFTP_NO_OPTIONS", "", CURLOPT_TFTP_NO_OPTIONS);
 #endif
 
     // FTP OPTIONS
-    mod->addNativeVar(vm, "OPT_FTPPORT", "", vm.makeVar<VarInt>(loc, CURLOPT_FTPPORT));
-    mod->addNativeVar(vm, "OPT_QUOTE", "", vm.makeVar<VarInt>(loc, CURLOPT_QUOTE));
-    mod->addNativeVar(vm, "OPT_POSTQUOTE", "", vm.makeVar<VarInt>(loc, CURLOPT_POSTQUOTE));
-    mod->addNativeVar(vm, "OPT_PREQUOTE", "", vm.makeVar<VarInt>(loc, CURLOPT_PREQUOTE));
-    mod->addNativeVar(vm, "OPT_APPEND", "", vm.makeVar<VarInt>(loc, CURLOPT_APPEND));
-    mod->addNativeVar(vm, "OPT_FTP_USE_EPRT", "", vm.makeVar<VarInt>(loc, CURLOPT_FTP_USE_EPRT));
-    mod->addNativeVar(vm, "OPT_FTP_USE_EPSV", "", vm.makeVar<VarInt>(loc, CURLOPT_FTP_USE_EPSV));
-    mod->addNativeVar(vm, "OPT_FTP_USE_PRET", "", vm.makeVar<VarInt>(loc, CURLOPT_FTP_USE_PRET));
-    mod->addNativeVar(vm, "OPT_FTP_CREATE_MISSING_DIRS", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_FTP_CREATE_MISSING_DIRS));
-    mod->addNativeVar(vm, "OPT_FTP_RESPONSE_TIMEOUT", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_FTP_RESPONSE_TIMEOUT));
-    mod->addNativeVar(vm, "OPT_FTP_ALTERNATIVE_TO_USER", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_FTP_ALTERNATIVE_TO_USER));
-    mod->addNativeVar(vm, "OPT_FTP_SKIP_PASV_IP", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_FTP_SKIP_PASV_IP));
-    mod->addNativeVar(vm, "OPT_FTPSSLAUTH", "", vm.makeVar<VarInt>(loc, CURLOPT_FTPSSLAUTH));
-    mod->addNativeVar(vm, "OPT_FTP_SSL_CCC", "", vm.makeVar<VarInt>(loc, CURLOPT_FTP_SSL_CCC));
-    mod->addNativeVar(vm, "OPT_FTP_ACCOUNT", "", vm.makeVar<VarInt>(loc, CURLOPT_FTP_ACCOUNT));
-    mod->addNativeVar(vm, "OPT_FTP_FILEMETHOD", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_FTP_FILEMETHOD));
+    vm.makeLocal<VarInt>(loc, "OPT_FTPPORT", "", CURLOPT_FTPPORT);
+    vm.makeLocal<VarInt>(loc, "OPT_QUOTE", "", CURLOPT_QUOTE);
+    vm.makeLocal<VarInt>(loc, "OPT_POSTQUOTE", "", CURLOPT_POSTQUOTE);
+    vm.makeLocal<VarInt>(loc, "OPT_PREQUOTE", "", CURLOPT_PREQUOTE);
+    vm.makeLocal<VarInt>(loc, "OPT_APPEND", "", CURLOPT_APPEND);
+    vm.makeLocal<VarInt>(loc, "OPT_FTP_USE_EPRT", "", CURLOPT_FTP_USE_EPRT);
+    vm.makeLocal<VarInt>(loc, "OPT_FTP_USE_EPSV", "", CURLOPT_FTP_USE_EPSV);
+    vm.makeLocal<VarInt>(loc, "OPT_FTP_USE_PRET", "", CURLOPT_FTP_USE_PRET);
+    vm.makeLocal<VarInt>(loc, "OPT_FTP_CREATE_MISSING_DIRS", "", CURLOPT_FTP_CREATE_MISSING_DIRS);
+    vm.makeLocal<VarInt>(loc, "OPT_FTP_RESPONSE_TIMEOUT", "", CURLOPT_FTP_RESPONSE_TIMEOUT);
+    vm.makeLocal<VarInt>(loc, "OPT_FTP_ALTERNATIVE_TO_USER", "", CURLOPT_FTP_ALTERNATIVE_TO_USER);
+    vm.makeLocal<VarInt>(loc, "OPT_FTP_SKIP_PASV_IP", "", CURLOPT_FTP_SKIP_PASV_IP);
+    vm.makeLocal<VarInt>(loc, "OPT_FTPSSLAUTH", "", CURLOPT_FTPSSLAUTH);
+    vm.makeLocal<VarInt>(loc, "OPT_FTP_SSL_CCC", "", CURLOPT_FTP_SSL_CCC);
+    vm.makeLocal<VarInt>(loc, "OPT_FTP_ACCOUNT", "", CURLOPT_FTP_ACCOUNT);
+    vm.makeLocal<VarInt>(loc, "OPT_FTP_FILEMETHOD", "", CURLOPT_FTP_FILEMETHOD);
 
     // RTSP OPTIONS
-    mod->addNativeVar(vm, "OPT_RTSP_REQUEST", "", vm.makeVar<VarInt>(loc, CURLOPT_RTSP_REQUEST));
-    mod->addNativeVar(vm, "OPT_RTSP_SESSION_ID", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_RTSP_SESSION_ID));
-    mod->addNativeVar(vm, "OPT_RTSP_STREAM_URI", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_RTSP_STREAM_URI));
-    mod->addNativeVar(vm, "OPT_RTSP_TRANSPORT", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_RTSP_TRANSPORT));
-    mod->addNativeVar(vm, "OPT_RTSP_CLIENT_CSEQ", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_RTSP_CLIENT_CSEQ));
-    mod->addNativeVar(vm, "OPT_RTSP_SERVER_CSEQ", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_RTSP_SERVER_CSEQ));
+    vm.makeLocal<VarInt>(loc, "OPT_RTSP_REQUEST", "", CURLOPT_RTSP_REQUEST);
+    vm.makeLocal<VarInt>(loc, "OPT_RTSP_SESSION_ID", "", CURLOPT_RTSP_SESSION_ID);
+    vm.makeLocal<VarInt>(loc, "OPT_RTSP_STREAM_URI", "", CURLOPT_RTSP_STREAM_URI);
+    vm.makeLocal<VarInt>(loc, "OPT_RTSP_TRANSPORT", "", CURLOPT_RTSP_TRANSPORT);
+    vm.makeLocal<VarInt>(loc, "OPT_RTSP_CLIENT_CSEQ", "", CURLOPT_RTSP_CLIENT_CSEQ);
+    vm.makeLocal<VarInt>(loc, "OPT_RTSP_SERVER_CSEQ", "", CURLOPT_RTSP_SERVER_CSEQ);
 
     // PROTOCOL OPTIONS
-    mod->addNativeVar(vm, "OPT_TRANSFERTEXT", "", vm.makeVar<VarInt>(loc, CURLOPT_TRANSFERTEXT));
-    mod->addNativeVar(vm, "OPT_PROXY_TRANSFER_MODE", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_PROXY_TRANSFER_MODE));
-    mod->addNativeVar(vm, "OPT_CRLF", "", vm.makeVar<VarInt>(loc, CURLOPT_CRLF));
-    mod->addNativeVar(vm, "OPT_RANGE", "", vm.makeVar<VarInt>(loc, CURLOPT_RANGE));
-    mod->addNativeVar(vm, "OPT_RESUME_FROM", "", vm.makeVar<VarInt>(loc, CURLOPT_RESUME_FROM));
-    mod->addNativeVar(vm, "OPT_RESUME_FROM_LARGE", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_RESUME_FROM_LARGE));
+    vm.makeLocal<VarInt>(loc, "OPT_TRANSFERTEXT", "", CURLOPT_TRANSFERTEXT);
+    vm.makeLocal<VarInt>(loc, "OPT_PROXY_TRANSFER_MODE", "", CURLOPT_PROXY_TRANSFER_MODE);
+    vm.makeLocal<VarInt>(loc, "OPT_CRLF", "", CURLOPT_CRLF);
+    vm.makeLocal<VarInt>(loc, "OPT_RANGE", "", CURLOPT_RANGE);
+    vm.makeLocal<VarInt>(loc, "OPT_RESUME_FROM", "", CURLOPT_RESUME_FROM);
+    vm.makeLocal<VarInt>(loc, "OPT_RESUME_FROM_LARGE", "", CURLOPT_RESUME_FROM_LARGE);
 #if CURL_AT_LEAST_VERSION(7, 63, 0)
-    mod->addNativeVar(vm, "OPT_CURLU", "", vm.makeVar<VarInt>(loc, CURLOPT_CURLU));
+    vm.makeLocal<VarInt>(loc, "OPT_CURLU", "", CURLOPT_CURLU);
 #endif
-    mod->addNativeVar(vm, "OPT_CUSTOMREQUEST", "", vm.makeVar<VarInt>(loc, CURLOPT_CUSTOMREQUEST));
-    mod->addNativeVar(vm, "OPT_FILETIME", "", vm.makeVar<VarInt>(loc, CURLOPT_FILETIME));
-    mod->addNativeVar(vm, "OPT_DIRLISTONLY", "", vm.makeVar<VarInt>(loc, CURLOPT_DIRLISTONLY));
-    mod->addNativeVar(vm, "OPT_NOBODY", "", vm.makeVar<VarInt>(loc, CURLOPT_NOBODY));
-    mod->addNativeVar(vm, "OPT_INFILESIZE", "", vm.makeVar<VarInt>(loc, CURLOPT_INFILESIZE));
-    mod->addNativeVar(vm, "OPT_INFILESIZE_LARGE", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_INFILESIZE_LARGE));
-    mod->addNativeVar(vm, "OPT_UPLOAD", "", vm.makeVar<VarInt>(loc, CURLOPT_UPLOAD));
+    vm.makeLocal<VarInt>(loc, "OPT_CUSTOMREQUEST", "", CURLOPT_CUSTOMREQUEST);
+    vm.makeLocal<VarInt>(loc, "OPT_FILETIME", "", CURLOPT_FILETIME);
+    vm.makeLocal<VarInt>(loc, "OPT_DIRLISTONLY", "", CURLOPT_DIRLISTONLY);
+    vm.makeLocal<VarInt>(loc, "OPT_NOBODY", "", CURLOPT_NOBODY);
+    vm.makeLocal<VarInt>(loc, "OPT_INFILESIZE", "", CURLOPT_INFILESIZE);
+    vm.makeLocal<VarInt>(loc, "OPT_INFILESIZE_LARGE", "", CURLOPT_INFILESIZE_LARGE);
+    vm.makeLocal<VarInt>(loc, "OPT_UPLOAD", "", CURLOPT_UPLOAD);
 #if CURL_AT_LEAST_VERSION(7, 62, 0)
-    mod->addNativeVar(vm, "OPT_UPLOAD_BUFFERSIZE", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_UPLOAD_BUFFERSIZE));
+    vm.makeLocal<VarInt>(loc, "OPT_UPLOAD_BUFFERSIZE", "", CURLOPT_UPLOAD_BUFFERSIZE);
 #endif
 #if CURL_AT_LEAST_VERSION(7, 56, 0)
-    mod->addNativeVar(vm, "OPT_MIMEPOST", "", vm.makeVar<VarInt>(loc, CURLOPT_MIMEPOST));
+    vm.makeLocal<VarInt>(loc, "OPT_MIMEPOST", "", CURLOPT_MIMEPOST);
 #endif
-    mod->addNativeVar(vm, "OPT_MAXFILESIZE", "", vm.makeVar<VarInt>(loc, CURLOPT_MAXFILESIZE));
-    mod->addNativeVar(vm, "OPT_MAXFILESIZE_LARGE", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_MAXFILESIZE_LARGE));
-    mod->addNativeVar(vm, "OPT_TIMECONDITION", "", vm.makeVar<VarInt>(loc, CURLOPT_TIMECONDITION));
-    mod->addNativeVar(vm, "OPT_TIMEVALUE", "", vm.makeVar<VarInt>(loc, CURLOPT_TIMEVALUE));
+    vm.makeLocal<VarInt>(loc, "OPT_MAXFILESIZE", "", CURLOPT_MAXFILESIZE);
+    vm.makeLocal<VarInt>(loc, "OPT_MAXFILESIZE_LARGE", "", CURLOPT_MAXFILESIZE_LARGE);
+    vm.makeLocal<VarInt>(loc, "OPT_TIMECONDITION", "", CURLOPT_TIMECONDITION);
+    vm.makeLocal<VarInt>(loc, "OPT_TIMEVALUE", "", CURLOPT_TIMEVALUE);
 #if CURL_AT_LEAST_VERSION(7, 59, 0)
-    mod->addNativeVar(vm, "OPT_TIMEVALUE_LARGE", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_TIMEVALUE_LARGE));
+    vm.makeLocal<VarInt>(loc, "OPT_TIMEVALUE_LARGE", "", CURLOPT_TIMEVALUE_LARGE);
 #endif
 
     // CONNECTION OPTIONS
-    mod->addNativeVar(vm, "OPT_TIMEOUT", "", vm.makeVar<VarInt>(loc, CURLOPT_TIMEOUT));
-    mod->addNativeVar(vm, "OPT_TIMEOUT_MS", "", vm.makeVar<VarInt>(loc, CURLOPT_TIMEOUT_MS));
-    mod->addNativeVar(vm, "OPT_LOW_SPEED_LIMIT", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_LOW_SPEED_LIMIT));
-    mod->addNativeVar(vm, "OPT_LOW_SPEED_TIME", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_LOW_SPEED_TIME));
-    mod->addNativeVar(vm, "OPT_MAX_SEND_SPEED_LARGE", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_MAX_SEND_SPEED_LARGE));
-    mod->addNativeVar(vm, "OPT_MAX_RECV_SPEED_LARGE", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_MAX_RECV_SPEED_LARGE));
-    mod->addNativeVar(vm, "OPT_MAXCONNECTS", "", vm.makeVar<VarInt>(loc, CURLOPT_MAXCONNECTS));
-    mod->addNativeVar(vm, "OPT_FRESH_CONNECT", "", vm.makeVar<VarInt>(loc, CURLOPT_FRESH_CONNECT));
-    mod->addNativeVar(vm, "OPT_FORBID_REUSE", "", vm.makeVar<VarInt>(loc, CURLOPT_FORBID_REUSE));
+    vm.makeLocal<VarInt>(loc, "OPT_TIMEOUT", "", CURLOPT_TIMEOUT);
+    vm.makeLocal<VarInt>(loc, "OPT_TIMEOUT_MS", "", CURLOPT_TIMEOUT_MS);
+    vm.makeLocal<VarInt>(loc, "OPT_LOW_SPEED_LIMIT", "", CURLOPT_LOW_SPEED_LIMIT);
+    vm.makeLocal<VarInt>(loc, "OPT_LOW_SPEED_TIME", "", CURLOPT_LOW_SPEED_TIME);
+    vm.makeLocal<VarInt>(loc, "OPT_MAX_SEND_SPEED_LARGE", "", CURLOPT_MAX_SEND_SPEED_LARGE);
+    vm.makeLocal<VarInt>(loc, "OPT_MAX_RECV_SPEED_LARGE", "", CURLOPT_MAX_RECV_SPEED_LARGE);
+    vm.makeLocal<VarInt>(loc, "OPT_MAXCONNECTS", "", CURLOPT_MAXCONNECTS);
+    vm.makeLocal<VarInt>(loc, "OPT_FRESH_CONNECT", "", CURLOPT_FRESH_CONNECT);
+    vm.makeLocal<VarInt>(loc, "OPT_FORBID_REUSE", "", CURLOPT_FORBID_REUSE);
 #if CURL_AT_LEAST_VERSION(7, 65, 0)
-    mod->addNativeVar(vm, "OPT_MAXAGE_CONN", "", vm.makeVar<VarInt>(loc, CURLOPT_MAXAGE_CONN));
+    vm.makeLocal<VarInt>(loc, "OPT_MAXAGE_CONN", "", CURLOPT_MAXAGE_CONN);
 #endif
-    mod->addNativeVar(vm, "OPT_CONNECTTIMEOUT", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_CONNECTTIMEOUT));
-    mod->addNativeVar(vm, "OPT_CONNECTTIMEOUT_MS", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_CONNECTTIMEOUT_MS));
-    mod->addNativeVar(vm, "OPT_IPRESOLVE", "", vm.makeVar<VarInt>(loc, CURLOPT_IPRESOLVE));
-    mod->addNativeVar(vm, "OPT_CONNECT_ONLY", "", vm.makeVar<VarInt>(loc, CURLOPT_CONNECT_ONLY));
-    mod->addNativeVar(vm, "OPT_USE_SSL", "", vm.makeVar<VarInt>(loc, CURLOPT_USE_SSL));
-    mod->addNativeVar(vm, "OPT_RESOLVE", "", vm.makeVar<VarInt>(loc, CURLOPT_RESOLVE));
-    mod->addNativeVar(vm, "OPT_DNS_INTERFACE", "", vm.makeVar<VarInt>(loc, CURLOPT_DNS_INTERFACE));
-    mod->addNativeVar(vm, "OPT_DNS_LOCAL_IP4", "", vm.makeVar<VarInt>(loc, CURLOPT_DNS_LOCAL_IP4));
-    mod->addNativeVar(vm, "OPT_DNS_LOCAL_IP6", "", vm.makeVar<VarInt>(loc, CURLOPT_DNS_LOCAL_IP6));
-    mod->addNativeVar(vm, "OPT_DNS_SERVERS", "", vm.makeVar<VarInt>(loc, CURLOPT_DNS_SERVERS));
+    vm.makeLocal<VarInt>(loc, "OPT_CONNECTTIMEOUT", "", CURLOPT_CONNECTTIMEOUT);
+    vm.makeLocal<VarInt>(loc, "OPT_CONNECTTIMEOUT_MS", "", CURLOPT_CONNECTTIMEOUT_MS);
+    vm.makeLocal<VarInt>(loc, "OPT_IPRESOLVE", "", CURLOPT_IPRESOLVE);
+    vm.makeLocal<VarInt>(loc, "OPT_CONNECT_ONLY", "", CURLOPT_CONNECT_ONLY);
+    vm.makeLocal<VarInt>(loc, "OPT_USE_SSL", "", CURLOPT_USE_SSL);
+    vm.makeLocal<VarInt>(loc, "OPT_RESOLVE", "", CURLOPT_RESOLVE);
+    vm.makeLocal<VarInt>(loc, "OPT_DNS_INTERFACE", "", CURLOPT_DNS_INTERFACE);
+    vm.makeLocal<VarInt>(loc, "OPT_DNS_LOCAL_IP4", "", CURLOPT_DNS_LOCAL_IP4);
+    vm.makeLocal<VarInt>(loc, "OPT_DNS_LOCAL_IP6", "", CURLOPT_DNS_LOCAL_IP6);
+    vm.makeLocal<VarInt>(loc, "OPT_DNS_SERVERS", "", CURLOPT_DNS_SERVERS);
 #if CURL_AT_LEAST_VERSION(7, 60, 0)
-    mod->addNativeVar(vm, "OPT_DNS_SHUFFLE_ADDRESSES", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_DNS_SHUFFLE_ADDRESSES));
+    vm.makeLocal<VarInt>(loc, "OPT_DNS_SHUFFLE_ADDRESSES", "", CURLOPT_DNS_SHUFFLE_ADDRESSES);
 #endif
-    mod->addNativeVar(vm, "OPT_ACCEPTTIMEOUT_MS", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_ACCEPTTIMEOUT_MS));
+    vm.makeLocal<VarInt>(loc, "OPT_ACCEPTTIMEOUT_MS", "", CURLOPT_ACCEPTTIMEOUT_MS);
 #if CURL_AT_LEAST_VERSION(7, 59, 0)
-    mod->addNativeVar(vm, "OPT_HAPPY_EYEBALLS_TIMEOUT_MS", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_HAPPY_EYEBALLS_TIMEOUT_MS));
+    vm.makeLocal<VarInt>(loc, "OPT_HAPPY_EYEBALLS_TIMEOUT_MS", "",
+                         CURLOPT_HAPPY_EYEBALLS_TIMEOUT_MS);
 #endif
 #if CURL_AT_LEAST_VERSION(7, 62, 0)
-    mod->addNativeVar(vm, "OPT_UPKEEP_INTERVAL_MS", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_UPKEEP_INTERVAL_MS));
+    vm.makeLocal<VarInt>(loc, "OPT_UPKEEP_INTERVAL_MS", "", CURLOPT_UPKEEP_INTERVAL_MS);
 #endif
 
     // SSL and SECURITY OPTIONS
-    mod->addNativeVar(vm, "OPT_SSLCERT", "", vm.makeVar<VarInt>(loc, CURLOPT_SSLCERT));
-    mod->addNativeVar(vm, "OPT_SSLCERTTYPE", "", vm.makeVar<VarInt>(loc, CURLOPT_SSLCERTTYPE));
-    mod->addNativeVar(vm, "OPT_SSLKEY", "", vm.makeVar<VarInt>(loc, CURLOPT_SSLKEY));
-    mod->addNativeVar(vm, "OPT_SSLKEYTYPE", "", vm.makeVar<VarInt>(loc, CURLOPT_SSLKEYTYPE));
-    mod->addNativeVar(vm, "OPT_KEYPASSWD", "", vm.makeVar<VarInt>(loc, CURLOPT_KEYPASSWD));
-    mod->addNativeVar(vm, "OPT_SSL_ENABLE_ALPN", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_SSL_ENABLE_ALPN));
-    mod->addNativeVar(vm, "OPT_SSLENGINE", "", vm.makeVar<VarInt>(loc, CURLOPT_SSLENGINE));
-    mod->addNativeVar(vm, "OPT_SSLENGINE_DEFAULT", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_SSLENGINE_DEFAULT));
-    mod->addNativeVar(vm, "OPT_SSLVERSION", "", vm.makeVar<VarInt>(loc, CURLOPT_SSLVERSION));
-    mod->addNativeVar(vm, "OPT_SSL_VERIFYPEER", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_SSL_VERIFYPEER));
-    mod->addNativeVar(vm, "OPT_SSL_VERIFYHOST", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_SSL_VERIFYHOST));
-    mod->addNativeVar(vm, "OPT_SSL_VERIFYSTATUS", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_SSL_VERIFYSTATUS));
+    vm.makeLocal<VarInt>(loc, "OPT_SSLCERT", "", CURLOPT_SSLCERT);
+    vm.makeLocal<VarInt>(loc, "OPT_SSLCERTTYPE", "", CURLOPT_SSLCERTTYPE);
+    vm.makeLocal<VarInt>(loc, "OPT_SSLKEY", "", CURLOPT_SSLKEY);
+    vm.makeLocal<VarInt>(loc, "OPT_SSLKEYTYPE", "", CURLOPT_SSLKEYTYPE);
+    vm.makeLocal<VarInt>(loc, "OPT_KEYPASSWD", "", CURLOPT_KEYPASSWD);
+    vm.makeLocal<VarInt>(loc, "OPT_SSL_ENABLE_ALPN", "", CURLOPT_SSL_ENABLE_ALPN);
+    vm.makeLocal<VarInt>(loc, "OPT_SSLENGINE", "", CURLOPT_SSLENGINE);
+    vm.makeLocal<VarInt>(loc, "OPT_SSLENGINE_DEFAULT", "", CURLOPT_SSLENGINE_DEFAULT);
+    vm.makeLocal<VarInt>(loc, "OPT_SSLVERSION", "", CURLOPT_SSLVERSION);
+    vm.makeLocal<VarInt>(loc, "OPT_SSL_VERIFYPEER", "", CURLOPT_SSL_VERIFYPEER);
+    vm.makeLocal<VarInt>(loc, "OPT_SSL_VERIFYHOST", "", CURLOPT_SSL_VERIFYHOST);
+    vm.makeLocal<VarInt>(loc, "OPT_SSL_VERIFYSTATUS", "", CURLOPT_SSL_VERIFYSTATUS);
 #if CURL_AT_LEAST_VERSION(7, 52, 0)
-    mod->addNativeVar(vm, "OPT_PROXY_CAINFO", "", vm.makeVar<VarInt>(loc, CURLOPT_PROXY_CAINFO));
-    mod->addNativeVar(vm, "OPT_PROXY_CAPATH", "", vm.makeVar<VarInt>(loc, CURLOPT_PROXY_CAPATH));
-    mod->addNativeVar(vm, "OPT_PROXY_CRLFILE", "", vm.makeVar<VarInt>(loc, CURLOPT_PROXY_CRLFILE));
-    mod->addNativeVar(vm, "OPT_PROXY_KEYPASSWD", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_PROXY_KEYPASSWD));
-    mod->addNativeVar(vm, "OPT_PROXY_PINNEDPUBLICKEY", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_PROXY_PINNEDPUBLICKEY));
-    mod->addNativeVar(vm, "OPT_PROXY_SSLCERT", "", vm.makeVar<VarInt>(loc, CURLOPT_PROXY_SSLCERT));
-    mod->addNativeVar(vm, "OPT_PROXY_SSLCERTTYPE", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_PROXY_SSLCERTTYPE));
-    mod->addNativeVar(vm, "OPT_PROXY_SSLKEY", "", vm.makeVar<VarInt>(loc, CURLOPT_PROXY_SSLKEY));
-    mod->addNativeVar(vm, "OPT_PROXY_SSLKEYTYPE", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_PROXY_SSLKEYTYPE));
-    mod->addNativeVar(vm, "OPT_PROXY_SSLVERSION", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_PROXY_SSLVERSION));
-    mod->addNativeVar(vm, "OPT_PROXY_SSL_CIPHER_LIST", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_PROXY_SSL_CIPHER_LIST));
-    mod->addNativeVar(vm, "OPT_PROXY_SSL_OPTIONS", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_PROXY_SSL_OPTIONS));
-    mod->addNativeVar(vm, "OPT_PROXY_SSL_VERIFYHOST", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_PROXY_SSL_VERIFYHOST));
-    mod->addNativeVar(vm, "OPT_PROXY_SSL_VERIFYPEER", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_PROXY_SSL_VERIFYPEER));
+    vm.makeLocal<VarInt>(loc, "OPT_PROXY_CAINFO", "", CURLOPT_PROXY_CAINFO);
+    vm.makeLocal<VarInt>(loc, "OPT_PROXY_CAPATH", "", CURLOPT_PROXY_CAPATH);
+    vm.makeLocal<VarInt>(loc, "OPT_PROXY_CRLFILE", "", CURLOPT_PROXY_CRLFILE);
+    vm.makeLocal<VarInt>(loc, "OPT_PROXY_KEYPASSWD", "", CURLOPT_PROXY_KEYPASSWD);
+    vm.makeLocal<VarInt>(loc, "OPT_PROXY_PINNEDPUBLICKEY", "", CURLOPT_PROXY_PINNEDPUBLICKEY);
+    vm.makeLocal<VarInt>(loc, "OPT_PROXY_SSLCERT", "", CURLOPT_PROXY_SSLCERT);
+    vm.makeLocal<VarInt>(loc, "OPT_PROXY_SSLCERTTYPE", "", CURLOPT_PROXY_SSLCERTTYPE);
+    vm.makeLocal<VarInt>(loc, "OPT_PROXY_SSLKEY", "", CURLOPT_PROXY_SSLKEY);
+    vm.makeLocal<VarInt>(loc, "OPT_PROXY_SSLKEYTYPE", "", CURLOPT_PROXY_SSLKEYTYPE);
+    vm.makeLocal<VarInt>(loc, "OPT_PROXY_SSLVERSION", "", CURLOPT_PROXY_SSLVERSION);
+    vm.makeLocal<VarInt>(loc, "OPT_PROXY_SSL_CIPHER_LIST", "", CURLOPT_PROXY_SSL_CIPHER_LIST);
+    vm.makeLocal<VarInt>(loc, "OPT_PROXY_SSL_OPTIONS", "", CURLOPT_PROXY_SSL_OPTIONS);
+    vm.makeLocal<VarInt>(loc, "OPT_PROXY_SSL_VERIFYHOST", "", CURLOPT_PROXY_SSL_VERIFYHOST);
+    vm.makeLocal<VarInt>(loc, "OPT_PROXY_SSL_VERIFYPEER", "", CURLOPT_PROXY_SSL_VERIFYPEER);
 #endif
-    mod->addNativeVar(vm, "OPT_CAINFO", "", vm.makeVar<VarInt>(loc, CURLOPT_CAINFO));
-    mod->addNativeVar(vm, "OPT_ISSUERCERT", "", vm.makeVar<VarInt>(loc, CURLOPT_ISSUERCERT));
-    mod->addNativeVar(vm, "OPT_CAPATH", "", vm.makeVar<VarInt>(loc, CURLOPT_CAPATH));
-    mod->addNativeVar(vm, "OPT_CRLFILE", "", vm.makeVar<VarInt>(loc, CURLOPT_CRLFILE));
-    mod->addNativeVar(vm, "OPT_CERTINFO", "", vm.makeVar<VarInt>(loc, CURLOPT_CERTINFO));
-    mod->addNativeVar(vm, "OPT_PINNEDPUBLICKEY", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_PINNEDPUBLICKEY));
-    mod->addNativeVar(vm, "OPT_SSL_CIPHER_LIST", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_SSL_CIPHER_LIST));
+    vm.makeLocal<VarInt>(loc, "OPT_CAINFO", "", CURLOPT_CAINFO);
+    vm.makeLocal<VarInt>(loc, "OPT_ISSUERCERT", "", CURLOPT_ISSUERCERT);
+    vm.makeLocal<VarInt>(loc, "OPT_CAPATH", "", CURLOPT_CAPATH);
+    vm.makeLocal<VarInt>(loc, "OPT_CRLFILE", "", CURLOPT_CRLFILE);
+    vm.makeLocal<VarInt>(loc, "OPT_CERTINFO", "", CURLOPT_CERTINFO);
+    vm.makeLocal<VarInt>(loc, "OPT_PINNEDPUBLICKEY", "", CURLOPT_PINNEDPUBLICKEY);
+    vm.makeLocal<VarInt>(loc, "OPT_SSL_CIPHER_LIST", "", CURLOPT_SSL_CIPHER_LIST);
 #if CURL_AT_LEAST_VERSION(7, 61, 0)
-    mod->addNativeVar(vm, "OPT_TLS13_CIPHERS", "", vm.makeVar<VarInt>(loc, CURLOPT_TLS13_CIPHERS));
-    mod->addNativeVar(vm, "OPT_PROXY_TLS13_CIPHERS", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_PROXY_TLS13_CIPHERS));
+    vm.makeLocal<VarInt>(loc, "OPT_TLS13_CIPHERS", "", CURLOPT_TLS13_CIPHERS);
+    vm.makeLocal<VarInt>(loc, "OPT_PROXY_TLS13_CIPHERS", "", CURLOPT_PROXY_TLS13_CIPHERS);
 #endif
-    mod->addNativeVar(vm, "OPT_SSL_SESSIONID_CACHE", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_SSL_SESSIONID_CACHE));
-    mod->addNativeVar(vm, "OPT_SSL_OPTIONS", "", vm.makeVar<VarInt>(loc, CURLOPT_SSL_OPTIONS));
-    mod->addNativeVar(vm, "OPT_KRBLEVEL", "", vm.makeVar<VarInt>(loc, CURLOPT_KRBLEVEL));
-    mod->addNativeVar(vm, "OPT_GSSAPI_DELEGATION", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_GSSAPI_DELEGATION));
+    vm.makeLocal<VarInt>(loc, "OPT_SSL_SESSIONID_CACHE", "", CURLOPT_SSL_SESSIONID_CACHE);
+    vm.makeLocal<VarInt>(loc, "OPT_SSL_OPTIONS", "", CURLOPT_SSL_OPTIONS);
+    vm.makeLocal<VarInt>(loc, "OPT_KRBLEVEL", "", CURLOPT_KRBLEVEL);
+    vm.makeLocal<VarInt>(loc, "OPT_GSSAPI_DELEGATION", "", CURLOPT_GSSAPI_DELEGATION);
 
     // SSH OPTIONS
-    mod->addNativeVar(vm, "OPT_SSH_AUTH_TYPES", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_SSH_AUTH_TYPES));
+    vm.makeLocal<VarInt>(loc, "OPT_SSH_AUTH_TYPES", "", CURLOPT_SSH_AUTH_TYPES);
 #if CURL_AT_LEAST_VERSION(7, 56, 0)
-    mod->addNativeVar(vm, "OPT_SSH_COMPRESSION", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_SSH_COMPRESSION));
+    vm.makeLocal<VarInt>(loc, "OPT_SSH_COMPRESSION", "", CURLOPT_SSH_COMPRESSION);
 #endif
-    mod->addNativeVar(vm, "OPT_SSH_HOST_PUBLIC_KEY_MD5", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_SSH_HOST_PUBLIC_KEY_MD5));
-    mod->addNativeVar(vm, "OPT_SSH_PUBLIC_KEYFILE", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_SSH_PUBLIC_KEYFILE));
-    mod->addNativeVar(vm, "OPT_SSH_PRIVATE_KEYFILE", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_SSH_PRIVATE_KEYFILE));
-    mod->addNativeVar(vm, "OPT_SSH_KNOWNHOSTS", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_SSH_KNOWNHOSTS));
-    mod->addNativeVar(vm, "OPT_SSH_KEYFUNCTION", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_SSH_KEYFUNCTION));
-    mod->addNativeVar(vm, "OPT_SSH_KEYDATA", "", vm.makeVar<VarInt>(loc, CURLOPT_SSH_KEYDATA));
+    vm.makeLocal<VarInt>(loc, "OPT_SSH_HOST_PUBLIC_KEY_MD5", "", CURLOPT_SSH_HOST_PUBLIC_KEY_MD5);
+    vm.makeLocal<VarInt>(loc, "OPT_SSH_PUBLIC_KEYFILE", "", CURLOPT_SSH_PUBLIC_KEYFILE);
+    vm.makeLocal<VarInt>(loc, "OPT_SSH_PRIVATE_KEYFILE", "", CURLOPT_SSH_PRIVATE_KEYFILE);
+    vm.makeLocal<VarInt>(loc, "OPT_SSH_KNOWNHOSTS", "", CURLOPT_SSH_KNOWNHOSTS);
+    vm.makeLocal<VarInt>(loc, "OPT_SSH_KEYFUNCTION", "", CURLOPT_SSH_KEYFUNCTION);
+    vm.makeLocal<VarInt>(loc, "OPT_SSH_KEYDATA", "", CURLOPT_SSH_KEYDATA);
 
     // OTHER OPTIONS
-    mod->addNativeVar(vm, "OPT_PRIVATE", "", vm.makeVar<VarInt>(loc, CURLOPT_PRIVATE));
-    mod->addNativeVar(vm, "OPT_SHARE", "", vm.makeVar<VarInt>(loc, CURLOPT_SHARE));
-    mod->addNativeVar(vm, "OPT_NEW_FILE_PERMS", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_NEW_FILE_PERMS));
-    mod->addNativeVar(vm, "OPT_NEW_DIRECTORY_PERMS", "",
-                      vm.makeVar<VarInt>(loc, CURLOPT_NEW_DIRECTORY_PERMS));
+    vm.makeLocal<VarInt>(loc, "OPT_PRIVATE", "", CURLOPT_PRIVATE);
+    vm.makeLocal<VarInt>(loc, "OPT_SHARE", "", CURLOPT_SHARE);
+    vm.makeLocal<VarInt>(loc, "OPT_NEW_FILE_PERMS", "", CURLOPT_NEW_FILE_PERMS);
+    vm.makeLocal<VarInt>(loc, "OPT_NEW_DIRECTORY_PERMS", "", CURLOPT_NEW_DIRECTORY_PERMS);
 
     // TELNET OPTIONS
-    mod->addNativeVar(vm, "OPT_TELNETOPTIONS", "", vm.makeVar<VarInt>(loc, CURLOPT_TELNETOPTIONS));
+    vm.makeLocal<VarInt>(loc, "OPT_TELNETOPTIONS", "", CURLOPT_TELNETOPTIONS);
 
     // CURLINFO
 
-    mod->addNativeVar(vm, "INFO_EFFECTIVE_URL", "",
-                      vm.makeVar<VarInt>(loc, CURLINFO_EFFECTIVE_URL));
-    mod->addNativeVar(vm, "INFO_RESPONSE_CODE", "",
-                      vm.makeVar<VarInt>(loc, CURLINFO_RESPONSE_CODE));
-    mod->addNativeVar(vm, "INFO_TOTAL_TIME", "", vm.makeVar<VarInt>(loc, CURLINFO_TOTAL_TIME));
-    mod->addNativeVar(vm, "INFO_NAMELOOKUP_TIME", "",
-                      vm.makeVar<VarInt>(loc, CURLINFO_NAMELOOKUP_TIME));
-    mod->addNativeVar(vm, "INFO_CONNECT_TIME", "", vm.makeVar<VarInt>(loc, CURLINFO_CONNECT_TIME));
-    mod->addNativeVar(vm, "INFO_PRETRANSFER_TIME", "",
-                      vm.makeVar<VarInt>(loc, CURLINFO_PRETRANSFER_TIME));
-    mod->addNativeVar(vm, "INFO_SIZE_UPLOAD_T", "",
-                      vm.makeVar<VarInt>(loc, CURLINFO_SIZE_UPLOAD_T));
-    mod->addNativeVar(vm, "INFO_SIZE_DOWNLOAD_T", "",
-                      vm.makeVar<VarInt>(loc, CURLINFO_SIZE_DOWNLOAD_T));
-    mod->addNativeVar(vm, "INFO_SPEED_DOWNLOAD_T", "",
-                      vm.makeVar<VarInt>(loc, CURLINFO_SPEED_DOWNLOAD_T));
-    mod->addNativeVar(vm, "INFO_SPEED_UPLOAD_T", "",
-                      vm.makeVar<VarInt>(loc, CURLINFO_SPEED_UPLOAD_T));
-    mod->addNativeVar(vm, "INFO_HEADER_SIZE", "", vm.makeVar<VarInt>(loc, CURLINFO_HEADER_SIZE));
-    mod->addNativeVar(vm, "INFO_REQUEST_SIZE", "", vm.makeVar<VarInt>(loc, CURLINFO_REQUEST_SIZE));
-    mod->addNativeVar(vm, "INFO_SSL_VERIFYRESULT", "",
-                      vm.makeVar<VarInt>(loc, CURLINFO_SSL_VERIFYRESULT));
-    mod->addNativeVar(vm, "INFO_FILETIME", "", vm.makeVar<VarInt>(loc, CURLINFO_FILETIME));
-    mod->addNativeVar(vm, "INFO_FILETIME_T", "", vm.makeVar<VarInt>(loc, CURLINFO_FILETIME_T));
-    mod->addNativeVar(vm, "INFO_CONTENT_LENGTH_DOWNLOAD_T", "",
-                      vm.makeVar<VarInt>(loc, CURLINFO_CONTENT_LENGTH_DOWNLOAD_T));
-    mod->addNativeVar(vm, "INFO_CONTENT_LENGTH_UPLOAD_T", "",
-                      vm.makeVar<VarInt>(loc, CURLINFO_CONTENT_LENGTH_UPLOAD_T));
-    mod->addNativeVar(vm, "INFO_STARTTRANSFER_TIME", "",
-                      vm.makeVar<VarInt>(loc, CURLINFO_STARTTRANSFER_TIME));
-    mod->addNativeVar(vm, "INFO_CONTENT_TYPE", "", vm.makeVar<VarInt>(loc, CURLINFO_CONTENT_TYPE));
-    mod->addNativeVar(vm, "INFO_REDIRECT_TIME", "",
-                      vm.makeVar<VarInt>(loc, CURLINFO_REDIRECT_TIME));
-    mod->addNativeVar(vm, "INFO_REDIRECT_COUNT", "",
-                      vm.makeVar<VarInt>(loc, CURLINFO_REDIRECT_COUNT));
-    mod->addNativeVar(vm, "INFO_PRIVATE", "", vm.makeVar<VarInt>(loc, CURLINFO_PRIVATE));
-    mod->addNativeVar(vm, "INFO_HTTP_CONNECTCODE", "",
-                      vm.makeVar<VarInt>(loc, CURLINFO_HTTP_CONNECTCODE));
-    mod->addNativeVar(vm, "INFO_HTTPAUTH_AVAIL", "",
-                      vm.makeVar<VarInt>(loc, CURLINFO_HTTPAUTH_AVAIL));
-    mod->addNativeVar(vm, "INFO_PROXYAUTH_AVAIL", "",
-                      vm.makeVar<VarInt>(loc, CURLINFO_PROXYAUTH_AVAIL));
-    mod->addNativeVar(vm, "INFO_OS_ERRNO", "", vm.makeVar<VarInt>(loc, CURLINFO_OS_ERRNO));
-    mod->addNativeVar(vm, "INFO_NUM_CONNECTS", "", vm.makeVar<VarInt>(loc, CURLINFO_NUM_CONNECTS));
-    mod->addNativeVar(vm, "INFO_SSL_ENGINES", "", vm.makeVar<VarInt>(loc, CURLINFO_SSL_ENGINES));
-    mod->addNativeVar(vm, "INFO_COOKIELIST", "", vm.makeVar<VarInt>(loc, CURLINFO_COOKIELIST));
-    mod->addNativeVar(vm, "INFO_FTP_ENTRY_PATH", "",
-                      vm.makeVar<VarInt>(loc, CURLINFO_FTP_ENTRY_PATH));
-    mod->addNativeVar(vm, "INFO_REDIRECT_URL", "", vm.makeVar<VarInt>(loc, CURLINFO_REDIRECT_URL));
-    mod->addNativeVar(vm, "INFO_PRIMARY_IP", "", vm.makeVar<VarInt>(loc, CURLINFO_PRIMARY_IP));
-    mod->addNativeVar(vm, "INFO_APPCONNECT_TIME", "",
-                      vm.makeVar<VarInt>(loc, CURLINFO_APPCONNECT_TIME));
-    mod->addNativeVar(vm, "INFO_CERTINFO", "", vm.makeVar<VarInt>(loc, CURLINFO_CERTINFO));
-    mod->addNativeVar(vm, "INFO_CONDITION_UNMET", "",
-                      vm.makeVar<VarInt>(loc, CURLINFO_CONDITION_UNMET));
-    mod->addNativeVar(vm, "INFO_RTSP_SESSION_ID", "",
-                      vm.makeVar<VarInt>(loc, CURLINFO_RTSP_SESSION_ID));
-    mod->addNativeVar(vm, "INFO_RTSP_CLIENT_CSEQ", "",
-                      vm.makeVar<VarInt>(loc, CURLINFO_RTSP_CLIENT_CSEQ));
-    mod->addNativeVar(vm, "INFO_RTSP_SERVER_CSEQ", "",
-                      vm.makeVar<VarInt>(loc, CURLINFO_RTSP_SERVER_CSEQ));
-    mod->addNativeVar(vm, "INFO_RTSP_CSEQ_RECV", "",
-                      vm.makeVar<VarInt>(loc, CURLINFO_RTSP_CSEQ_RECV));
-    mod->addNativeVar(vm, "INFO_PRIMARY_PORT", "", vm.makeVar<VarInt>(loc, CURLINFO_PRIMARY_PORT));
-    mod->addNativeVar(vm, "INFO_LOCAL_IP", "", vm.makeVar<VarInt>(loc, CURLINFO_LOCAL_IP));
-    mod->addNativeVar(vm, "INFO_LOCAL_PORT", "", vm.makeVar<VarInt>(loc, CURLINFO_LOCAL_PORT));
-    mod->addNativeVar(vm, "INFO_ACTIVESOCKET", "", vm.makeVar<VarInt>(loc, CURLINFO_ACTIVESOCKET));
-    mod->addNativeVar(vm, "INFO_TLS_SSL_PTR", "", vm.makeVar<VarInt>(loc, CURLINFO_TLS_SSL_PTR));
-    mod->addNativeVar(vm, "INFO_HTTP_VERSION", "", vm.makeVar<VarInt>(loc, CURLINFO_HTTP_VERSION));
-    mod->addNativeVar(vm, "INFO_PROXY_SSL_VERIFYRESULT", "",
-                      vm.makeVar<VarInt>(loc, CURLINFO_PROXY_SSL_VERIFYRESULT));
-    mod->addNativeVar(vm, "INFO_SCHEME", "", vm.makeVar<VarInt>(loc, CURLINFO_SCHEME));
-    mod->addNativeVar(vm, "INFO_TOTAL_TIME_T", "", vm.makeVar<VarInt>(loc, CURLINFO_TOTAL_TIME_T));
-    mod->addNativeVar(vm, "INFO_NAMELOOKUP_TIME_T", "",
-                      vm.makeVar<VarInt>(loc, CURLINFO_NAMELOOKUP_TIME_T));
-    mod->addNativeVar(vm, "INFO_CONNECT_TIME_T", "",
-                      vm.makeVar<VarInt>(loc, CURLINFO_CONNECT_TIME_T));
-    mod->addNativeVar(vm, "INFO_PRETRANSFER_TIME_T", "",
-                      vm.makeVar<VarInt>(loc, CURLINFO_PRETRANSFER_TIME_T));
-    mod->addNativeVar(vm, "INFO_STARTTRANSFER_TIME_T", "",
-                      vm.makeVar<VarInt>(loc, CURLINFO_STARTTRANSFER_TIME_T));
-    mod->addNativeVar(vm, "INFO_REDIRECT_TIME_T", "",
-                      vm.makeVar<VarInt>(loc, CURLINFO_REDIRECT_TIME_T));
-    mod->addNativeVar(vm, "INFO_APPCONNECT_TIME_T", "",
-                      vm.makeVar<VarInt>(loc, CURLINFO_APPCONNECT_TIME_T));
-    mod->addNativeVar(vm, "INFO_RETRY_AFTER", "", vm.makeVar<VarInt>(loc, CURLINFO_RETRY_AFTER));
-    mod->addNativeVar(vm, "INFO_EFFECTIVE_METHOD", "",
-                      vm.makeVar<VarInt>(loc, CURLINFO_EFFECTIVE_METHOD));
-    mod->addNativeVar(vm, "INFO_PROXY_ERROR", "", vm.makeVar<VarInt>(loc, CURLINFO_PROXY_ERROR));
-    mod->addNativeVar(vm, "INFO_REFERER", "", vm.makeVar<VarInt>(loc, CURLINFO_REFERER));
-    mod->addNativeVar(vm, "INFO_CAINFO", "", vm.makeVar<VarInt>(loc, CURLINFO_CAINFO));
-    mod->addNativeVar(vm, "INFO_CAPATH", "", vm.makeVar<VarInt>(loc, CURLINFO_CAPATH));
-    mod->addNativeVar(vm, "INFO_XFER_ID", "", vm.makeVar<VarInt>(loc, CURLINFO_XFER_ID));
-    mod->addNativeVar(vm, "INFO_CONN_ID", "", vm.makeVar<VarInt>(loc, CURLINFO_CONN_ID));
-    mod->addNativeVar(vm, "INFO_QUEUE_TIME_T", "", vm.makeVar<VarInt>(loc, CURLINFO_QUEUE_TIME_T));
-    mod->addNativeVar(vm, "INFO_USED_PROXY", "", vm.makeVar<VarInt>(loc, CURLINFO_USED_PROXY));
-    mod->addNativeVar(vm, "INFO_POSTTRANSFER_TIME_T", "",
-                      vm.makeVar<VarInt>(loc, CURLINFO_POSTTRANSFER_TIME_T));
-    mod->addNativeVar(vm, "INFO_EARLYDATA_SENT_T", "",
-                      vm.makeVar<VarInt>(loc, CURLINFO_EARLYDATA_SENT_T));
-    mod->addNativeVar(vm, "INFO_HTTPAUTH_USED", "",
-                      vm.makeVar<VarInt>(loc, CURLINFO_HTTPAUTH_USED));
-    mod->addNativeVar(vm, "INFO_PROXYAUTH_USED", "",
-                      vm.makeVar<VarInt>(loc, CURLINFO_PROXYAUTH_USED));
-    mod->addNativeVar(vm, "INFO_LASTONE", "", vm.makeVar<VarInt>(loc, CURLINFO_LASTONE));
+    vm.makeLocal<VarInt>(loc, "INFO_EFFECTIVE_URL", "", CURLINFO_EFFECTIVE_URL);
+    vm.makeLocal<VarInt>(loc, "INFO_RESPONSE_CODE", "", CURLINFO_RESPONSE_CODE);
+    vm.makeLocal<VarInt>(loc, "INFO_TOTAL_TIME", "", CURLINFO_TOTAL_TIME);
+    vm.makeLocal<VarInt>(loc, "INFO_NAMELOOKUP_TIME", "", CURLINFO_NAMELOOKUP_TIME);
+    vm.makeLocal<VarInt>(loc, "INFO_CONNECT_TIME", "", CURLINFO_CONNECT_TIME);
+    vm.makeLocal<VarInt>(loc, "INFO_PRETRANSFER_TIME", "", CURLINFO_PRETRANSFER_TIME);
+    vm.makeLocal<VarInt>(loc, "INFO_SIZE_UPLOAD_T", "", CURLINFO_SIZE_UPLOAD_T);
+    vm.makeLocal<VarInt>(loc, "INFO_SIZE_DOWNLOAD_T", "", CURLINFO_SIZE_DOWNLOAD_T);
+    vm.makeLocal<VarInt>(loc, "INFO_SPEED_DOWNLOAD_T", "", CURLINFO_SPEED_DOWNLOAD_T);
+    vm.makeLocal<VarInt>(loc, "INFO_SPEED_UPLOAD_T", "", CURLINFO_SPEED_UPLOAD_T);
+    vm.makeLocal<VarInt>(loc, "INFO_HEADER_SIZE", "", CURLINFO_HEADER_SIZE);
+    vm.makeLocal<VarInt>(loc, "INFO_REQUEST_SIZE", "", CURLINFO_REQUEST_SIZE);
+    vm.makeLocal<VarInt>(loc, "INFO_SSL_VERIFYRESULT", "", CURLINFO_SSL_VERIFYRESULT);
+    vm.makeLocal<VarInt>(loc, "INFO_FILETIME", "", CURLINFO_FILETIME);
+    vm.makeLocal<VarInt>(loc, "INFO_FILETIME_T", "", CURLINFO_FILETIME_T);
+    vm.makeLocal<VarInt>(loc, "INFO_CONTENT_LENGTH_DOWNLOAD_T", "",
+                         CURLINFO_CONTENT_LENGTH_DOWNLOAD_T);
+    vm.makeLocal<VarInt>(loc, "INFO_CONTENT_LENGTH_UPLOAD_T", "", CURLINFO_CONTENT_LENGTH_UPLOAD_T);
+    vm.makeLocal<VarInt>(loc, "INFO_STARTTRANSFER_TIME", "", CURLINFO_STARTTRANSFER_TIME);
+    vm.makeLocal<VarInt>(loc, "INFO_CONTENT_TYPE", "", CURLINFO_CONTENT_TYPE);
+    vm.makeLocal<VarInt>(loc, "INFO_REDIRECT_TIME", "", CURLINFO_REDIRECT_TIME);
+    vm.makeLocal<VarInt>(loc, "INFO_REDIRECT_COUNT", "", CURLINFO_REDIRECT_COUNT);
+    vm.makeLocal<VarInt>(loc, "INFO_PRIVATE", "", CURLINFO_PRIVATE);
+    vm.makeLocal<VarInt>(loc, "INFO_HTTP_CONNECTCODE", "", CURLINFO_HTTP_CONNECTCODE);
+    vm.makeLocal<VarInt>(loc, "INFO_HTTPAUTH_AVAIL", "", CURLINFO_HTTPAUTH_AVAIL);
+    vm.makeLocal<VarInt>(loc, "INFO_PROXYAUTH_AVAIL", "", CURLINFO_PROXYAUTH_AVAIL);
+    vm.makeLocal<VarInt>(loc, "INFO_OS_ERRNO", "", CURLINFO_OS_ERRNO);
+    vm.makeLocal<VarInt>(loc, "INFO_NUM_CONNECTS", "", CURLINFO_NUM_CONNECTS);
+    vm.makeLocal<VarInt>(loc, "INFO_SSL_ENGINES", "", CURLINFO_SSL_ENGINES);
+    vm.makeLocal<VarInt>(loc, "INFO_COOKIELIST", "", CURLINFO_COOKIELIST);
+    vm.makeLocal<VarInt>(loc, "INFO_FTP_ENTRY_PATH", "", CURLINFO_FTP_ENTRY_PATH);
+    vm.makeLocal<VarInt>(loc, "INFO_REDIRECT_URL", "", CURLINFO_REDIRECT_URL);
+    vm.makeLocal<VarInt>(loc, "INFO_PRIMARY_IP", "", CURLINFO_PRIMARY_IP);
+    vm.makeLocal<VarInt>(loc, "INFO_APPCONNECT_TIME", "", CURLINFO_APPCONNECT_TIME);
+    vm.makeLocal<VarInt>(loc, "INFO_CERTINFO", "", CURLINFO_CERTINFO);
+    vm.makeLocal<VarInt>(loc, "INFO_CONDITION_UNMET", "", CURLINFO_CONDITION_UNMET);
+    vm.makeLocal<VarInt>(loc, "INFO_RTSP_SESSION_ID", "", CURLINFO_RTSP_SESSION_ID);
+    vm.makeLocal<VarInt>(loc, "INFO_RTSP_CLIENT_CSEQ", "", CURLINFO_RTSP_CLIENT_CSEQ);
+    vm.makeLocal<VarInt>(loc, "INFO_RTSP_SERVER_CSEQ", "", CURLINFO_RTSP_SERVER_CSEQ);
+    vm.makeLocal<VarInt>(loc, "INFO_RTSP_CSEQ_RECV", "", CURLINFO_RTSP_CSEQ_RECV);
+    vm.makeLocal<VarInt>(loc, "INFO_PRIMARY_PORT", "", CURLINFO_PRIMARY_PORT);
+    vm.makeLocal<VarInt>(loc, "INFO_LOCAL_IP", "", CURLINFO_LOCAL_IP);
+    vm.makeLocal<VarInt>(loc, "INFO_LOCAL_PORT", "", CURLINFO_LOCAL_PORT);
+    vm.makeLocal<VarInt>(loc, "INFO_ACTIVESOCKET", "", CURLINFO_ACTIVESOCKET);
+    vm.makeLocal<VarInt>(loc, "INFO_TLS_SSL_PTR", "", CURLINFO_TLS_SSL_PTR);
+    vm.makeLocal<VarInt>(loc, "INFO_HTTP_VERSION", "", CURLINFO_HTTP_VERSION);
+    vm.makeLocal<VarInt>(loc, "INFO_PROXY_SSL_VERIFYRESULT", "", CURLINFO_PROXY_SSL_VERIFYRESULT);
+    vm.makeLocal<VarInt>(loc, "INFO_SCHEME", "", CURLINFO_SCHEME);
+    vm.makeLocal<VarInt>(loc, "INFO_TOTAL_TIME_T", "", CURLINFO_TOTAL_TIME_T);
+    vm.makeLocal<VarInt>(loc, "INFO_NAMELOOKUP_TIME_T", "", CURLINFO_NAMELOOKUP_TIME_T);
+    vm.makeLocal<VarInt>(loc, "INFO_CONNECT_TIME_T", "", CURLINFO_CONNECT_TIME_T);
+    vm.makeLocal<VarInt>(loc, "INFO_PRETRANSFER_TIME_T", "", CURLINFO_PRETRANSFER_TIME_T);
+    vm.makeLocal<VarInt>(loc, "INFO_STARTTRANSFER_TIME_T", "", CURLINFO_STARTTRANSFER_TIME_T);
+    vm.makeLocal<VarInt>(loc, "INFO_REDIRECT_TIME_T", "", CURLINFO_REDIRECT_TIME_T);
+    vm.makeLocal<VarInt>(loc, "INFO_APPCONNECT_TIME_T", "", CURLINFO_APPCONNECT_TIME_T);
+    vm.makeLocal<VarInt>(loc, "INFO_RETRY_AFTER", "", CURLINFO_RETRY_AFTER);
+    vm.makeLocal<VarInt>(loc, "INFO_EFFECTIVE_METHOD", "", CURLINFO_EFFECTIVE_METHOD);
+    vm.makeLocal<VarInt>(loc, "INFO_PROXY_ERROR", "", CURLINFO_PROXY_ERROR);
+    vm.makeLocal<VarInt>(loc, "INFO_REFERER", "", CURLINFO_REFERER);
+    vm.makeLocal<VarInt>(loc, "INFO_CAINFO", "", CURLINFO_CAINFO);
+    vm.makeLocal<VarInt>(loc, "INFO_CAPATH", "", CURLINFO_CAPATH);
+    vm.makeLocal<VarInt>(loc, "INFO_XFER_ID", "", CURLINFO_XFER_ID);
+    vm.makeLocal<VarInt>(loc, "INFO_CONN_ID", "", CURLINFO_CONN_ID);
+    vm.makeLocal<VarInt>(loc, "INFO_QUEUE_TIME_T", "", CURLINFO_QUEUE_TIME_T);
+    vm.makeLocal<VarInt>(loc, "INFO_USED_PROXY", "", CURLINFO_USED_PROXY);
+    vm.makeLocal<VarInt>(loc, "INFO_POSTTRANSFER_TIME_T", "", CURLINFO_POSTTRANSFER_TIME_T);
+    vm.makeLocal<VarInt>(loc, "INFO_EARLYDATA_SENT_T", "", CURLINFO_EARLYDATA_SENT_T);
+    vm.makeLocal<VarInt>(loc, "INFO_HTTPAUTH_USED", "", CURLINFO_HTTPAUTH_USED);
+    vm.makeLocal<VarInt>(loc, "INFO_PROXYAUTH_USED", "", CURLINFO_PROXYAUTH_USED);
+    vm.makeLocal<VarInt>(loc, "INFO_LASTONE", "", CURLINFO_LASTONE);
 }
 
 } // namespace fer

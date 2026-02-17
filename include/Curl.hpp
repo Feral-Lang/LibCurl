@@ -1,7 +1,7 @@
 #pragma once
 
 #include <curl/curl.h>
-#include <VM/Interpreter.hpp>
+#include <VM/VM.hpp>
 
 namespace fer
 {
@@ -26,17 +26,17 @@ class VarCurl : public Var
     size_t progIntervalTick;
     size_t progIntervalTickMax;
 
-    void onCreate(MemoryManager &mem) override;
-    void onDestroy(MemoryManager &mem) override;
+    void onCreate(VirtualMachine &vm) override;
+    void onDestroy(VirtualMachine &vm) override;
 
 public:
     VarCurl(ModuleLoc loc, CURL *val);
     ~VarCurl();
 
     // _progCB can be nullptr, and args can have zero elements
-    void setProgressCB(MemoryManager &mem, VarFn *_progCB, Span<Var *> args);
+    void setProgressCB(VirtualMachine &vm, VarFn *_progCB, Span<Var *> args);
     // _writeCB can be nullptr, and args can have zero elements
-    void setWriteCB(MemoryManager &mem, VarFn *_writeCB, Span<Var *> args);
+    void setWriteCB(VirtualMachine &vm, VarFn *_writeCB, Span<Var *> args);
     // data can be either VarMap or VarStr: if it's VarStr, the string is used as filename
     curl_mime *createMime(VirtualMachine &vm, ModuleLoc loc, Var *data);
     void clearMimeData();

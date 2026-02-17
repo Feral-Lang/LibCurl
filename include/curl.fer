@@ -1,4 +1,4 @@
-# the enum values are available in c++ module file (INIT_MODULE function)
+# the enum values are available in c++ module file (INIT_DLL function)
 loadlib('curl/Curl');
 
 let io = import('std/io');
