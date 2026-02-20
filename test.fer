@@ -4,7 +4,7 @@ let os = import('std/os');
 let curl = import('curl/curl');
 
 let url = 'http://212.183.159.230/10MB.zip';
-let out = '10MB.zip';
+let out = '10MB.zip'.path();
 
 let writeCB = fn(data, file) {
     io.fprint(file, data);
@@ -13,7 +13,7 @@ let writeCB = fn(data, file) {
 # scoped so that outFile is closed before attempting to remove it
 # otherwise, an error is produced on windows
 {
-    let outFile = fs.fopen('10MB.zip', 'w+');
+    let outFile = fs.fopen(out, 'w+');
 
     let c = curl.newEasy();
     c.setOpt(curl.OPT_URL, url);
