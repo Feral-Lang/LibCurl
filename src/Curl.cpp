@@ -34,7 +34,7 @@ int curlProgressCallback(void *ptr, curl_off_t dlTotal, curl_off_t dlDone, curl_
     as<VarFlt>(argsVar->at(2))->setVal(dlDone);
     as<VarFlt>(argsVar->at(3))->setVal(ulTotal);
     as<VarFlt>(argsVar->at(4))->setVal(ulDone);
-    if(!cbdata.curl->getProgressCB()->call(cbdata.vm, cbdata.loc, argsVar->getVal(), {})) {
+    if(!cbdata.curl->getProgressCB()->call(cbdata.vm, cbdata.loc, argsVar->getVal(), nullptr)) {
         cbdata.vm.fail(cbdata.loc, "failed to call progress callback, check error above");
         return 1;
     }
@@ -48,7 +48,7 @@ size_t curlWriteCallback(char *ptr, size_t size, size_t nmemb, void *userdata)
 
     VarVec *argsVar = cbdata.curl->getWriteCBArgs();
     as<VarStr>(argsVar->at(1))->setVal(StringRef(ptr, size * nmemb));
-    if(!cbdata.curl->getWriteCB()->call(cbdata.vm, cbdata.loc, argsVar->getVal(), {})) {
+    if(!cbdata.curl->getWriteCB()->call(cbdata.vm, cbdata.loc, argsVar->getVal(), nullptr)) {
         cbdata.vm.fail(cbdata.loc, "failed to call write callback, check error above");
         return 0;
     }
