@@ -60,7 +60,7 @@ size_t curlWriteCallback(char *ptr, size_t size, size_t nmemb, void *userdata)
 //////////////////////////////////////////////////////////////////////////////////////////////////
 
 VarCurl::VarCurl(ModuleLoc loc, CURL *val)
-    : Var(loc, 0), val(val), progCB(nullptr), writeCB(nullptr), progCBArgs(nullptr),
+    : Var(loc), val(val), progCB(nullptr), writeCB(nullptr), progCBArgs(nullptr),
       writeCBArgs(nullptr), progIntervalTick(0),
       progIntervalTickMax(CURL_DEFAULT_PROGRESS_INTERVAL_TICK_MAX)
 {}
