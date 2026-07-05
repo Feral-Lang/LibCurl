@@ -1,9 +1,0 @@
-let builder = import('pkg/builder');
-
-let project = builder.get();
-
-let libCurl = project.findPackage('CURL');
-libCurl.setTargetLinkName('CURL::libcurl');
-
-let feralCurl = project.addLibrary('Curl', 'Curl.cpp'); # `src/` is not needed here
-feralCurl.dependsOn(libCurl);

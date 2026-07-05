@@ -1,0 +1,15 @@
+let vec = import('std/vec');
+let package = import('std/package');
+
+let pkg = package.new(
+    name = 'Curl',
+    desc = 'Curl C library bindings for Feral.',
+    version = '0.1.0',
+    feral = '>=2.2.1',
+    author = vec.new('Chirag-Khandelwal <github@mail.chiragkh.me>')
+);
+
+pkg.requires('libcurl', version = '>=8.21.0');
+
+# Sample C++ extension provided by this project
+pkg.addTarget('Curl', 'Curl.cpp');

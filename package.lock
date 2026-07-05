@@ -1,0 +1,9 @@
+deps = [
+    {
+        isFeral = false;
+        sha256 = "";
+        url = "";
+        constraint = ">=8.21.0";
+        name = "libcurl";
+    }
+];
