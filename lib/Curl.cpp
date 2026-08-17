@@ -217,6 +217,15 @@ FERAL_FUNC(
     return vm.makeVar<VarCurl>(loc, curl);
 }
 
+FERAL_FUNC(feralCurlEasyStrErrFromInt, 1, false,
+           "  fn(errCode) -> Str\n"
+           "Returns the string representation of the error code `errCode`.")
+{
+    EXPECT(VarInt, args[1], "error code");
+    CURLcode code = (CURLcode)as<VarInt>(args[1])->getVal();
+    return vm.makeVar<VarStr>(loc, curl_easy_strerror(code));
+}
+
 FERAL_FUNC(feralCurlEasyPerform, 0, false,
            "  var.fn() -> Int\n"
            "Performs the required operations on the Curl object `var` and returns the status code "
@@ -229,21 +238,17 @@ FERAL_FUNC(feralCurlEasyPerform, 0, false,
     return vm.makeVar<VarInt>(loc, curl_easy_perform(curl));
 }
 
-FERAL_FUNC(feralCurlEasyStrErrFromInt, 1, false,
-           "  fn(errCode) -> Str\n"
-           "Returns the string representation of the error code `errCode`.")
+FERAL_FUNC(feralCurlEasyGetHeaderValue, 1, false,
+           "  var.fn(name) -> Str | Nil\n"
+           "Get the value for the given header `name`.")
 {
-    EXPECT(VarInt, args[1], "error code");
-    CURLcode code = (CURLcode)as<VarInt>(args[1])->getVal();
-    return vm.makeVar<VarStr>(loc, curl_easy_strerror(code));
-}
-
-FERAL_FUNC(feralCurlSetProgressCBTick, 1, false, "")
-{
-    EXPECT(VarInt, args[1], "tick count");
-    VarCurl *curl = as<VarCurl>(args[0]);
-    curl->setProgIntervalTickMax(as<VarInt>(args[1])->getVal());
-    return vm.getNil();
+    EXPECT(VarStr, args[1], "header name");
+    VarCurl *curl      = as<VarCurl>(args[0]);
+    const String &name = as<VarStr>(args[1])->getVal();
+    struct curl_header *header;
+    int res = curl_easy_header(curl->getVal(), name.c_str(), 0, CURLH_HEADER, -1, &header);
+    if(res != CURLHE_OK) return vm.getNil();
+    return vm.makeVar<VarStr>(loc, header->value);
 }
 
 FERAL_FUNC(feralCurlEasyGetInfoNative, 2, false,
@@ -289,27 +294,6 @@ FERAL_FUNC(feralCurlEasySetOptNative, 2, true,
     int res = CURLE_OK;
     // manually handle each of the options and work accordingly
     switch(opt) {
-    case CURLOPT_CONNECT_ONLY:   // fallthrough
-    case CURLOPT_FOLLOWLOCATION: // fallthrough
-    case CURLOPT_NOPROGRESS:     // fallthrough
-    case CURLOPT_VERBOSE: {
-        EXPECT(VarInt, arg, "option value");
-        res = curl_easy_setopt(curl, (CURLoption)opt, as<VarInt>(arg)->getVal());
-        break;
-    }
-    case CURLOPT_POSTFIELDS: {
-        // We don't want POSTFIELDS as it doesn't copy the string data to curl,
-        // which is annoying to deal with.
-        opt = CURLOPT_COPYPOSTFIELDS;
-    }
-    case CURLOPT_URL:
-    case CURLOPT_USERAGENT:
-    case CURLOPT_CUSTOMREQUEST:
-    case CURLOPT_COPYPOSTFIELDS: {
-        EXPECT(VarStr, arg, "option value");
-        res = curl_easy_setopt(curl, (CURLoption)opt, as<VarStr>(arg)->getVal().c_str());
-        break;
-    }
     case CURLOPT_MIMEPOST: {
         EXPECT(VarMap, arg, "name-data pairs");
         curl_mime *mime = varCurl->createMime(vm, loc, as<VarMap>(arg));
@@ -362,12 +346,88 @@ FERAL_FUNC(feralCurlEasySetOptNative, 2, true,
         res = curl_easy_setopt(curl, (CURLoption)opt, lst);
         break;
     }
+    // Ints
+    case CURLOPT_HTTPAUTH:
+    case CURLOPT_BUFFERSIZE:
+    case CURLOPT_MAXFILESIZE:
+    case CURLOPT_MAXREDIRS:
+    case CURLOPT_PORT:
+    case CURLOPT_POST:
+    case CURLOPT_TCP_KEEPALIVE:
+    case CURLOPT_CONNECT_ONLY:
+    case CURLOPT_FOLLOWLOCATION:
+    case CURLOPT_NOPROGRESS:
+    case CURLOPT_NOBODY:
+    case CURLOPT_VERBOSE: {
+        EXPECT(VarInt, arg, "option value");
+        res = curl_easy_setopt(curl, (CURLoption)opt, as<VarInt>(arg)->getVal());
+        break;
+    }
+    // Strings
+    case CURLOPT_POSTFIELDS: {
+        // We don't want POSTFIELDS as it doesn't copy the string data to curl,
+        // which is annoying to deal with.
+        opt = CURLOPT_COPYPOSTFIELDS;
+    }
+    case CURLOPT_URL:
+    case CURLOPT_PROXY:
+    case CURLOPT_UNIX_SOCKET_PATH:
+    case CURLOPT_DOH_URL:
+    case CURLOPT_DNS_LOCAL_IP4:
+    case CURLOPT_DNS_LOCAL_IP6:
+    case CURLOPT_USERNAME:
+    case CURLOPT_PASSWORD:
+    case CURLOPT_USERPWD: // <user>:<password>
+    case CURLOPT_LOGIN_OPTIONS:
+    case CURLOPT_XOAUTH2_BEARER:
+    case CURLOPT_SSLCERT:
+    case CURLOPT_SSLCERTTYPE:
+    case CURLOPT_SSLKEY:
+    case CURLOPT_SSLKEYPASSWD:
+    case CURLOPT_SSL_CIPHER_LIST:
+    case CURLOPT_SSL_VERIFYHOST:
+    case CURLOPT_SSL_VERIFYSTATUS:
+    case CURLOPT_CAINFO:
+    case CURLOPT_CAPATH:
+    case CURLOPT_ISSUERCERT:
+    case CURLOPT_PINNEDPUBLICKEY:
+    case CURLOPT_SSH_HOST_PUBLIC_KEY_MD5:
+    case CURLOPT_SSH_HOST_PUBLIC_KEY_SHA256:
+    case CURLOPT_SSH_PUBLIC_KEYFILE:
+    case CURLOPT_SSH_PRIVATE_KEYFILE:
+    case CURLOPT_SSH_KNOWNHOSTS:
+    case CURLOPT_REFERER:
+    case CURLOPT_COOKIE:
+    case CURLOPT_COOKIEFILE:
+    case CURLOPT_COOKIEJAR:
+    case CURLOPT_COOKIELIST:
+    case CURLOPT_MAIL_AUTH:
+    case CURLOPT_MAIL_FROM:
+    case CURLOPT_MAIL_RCPT:
+    case CURLOPT_USERAGENT:
+    case CURLOPT_CUSTOMREQUEST:
+    case CURLOPT_COPYPOSTFIELDS: {
+        EXPECT(VarStr, arg, "option value");
+        res = curl_easy_setopt(curl, (CURLoption)opt, as<VarStr>(arg)->getVal().c_str());
+        break;
+    }
     default: {
         vm.fail(loc, "operation is not yet implemented");
         return nullptr;
     }
     }
     return vm.makeVar<VarInt>(loc, res);
+}
+
+FERAL_FUNC(
+    feralCurlSetProgressCBTick, 1, false,
+    "  var.fn(tick) -> Nil\n"
+    "Sets the interval in number of calls to progress callback where the callback does nothing.")
+{
+    EXPECT(VarInt, args[1], "tick count");
+    VarCurl *curl = as<VarCurl>(args[0]);
+    curl->setProgIntervalTickMax(as<VarInt>(args[1])->getVal());
+    return vm.getNil();
 }
 
 INIT_DLL(Curl)
@@ -381,9 +441,10 @@ INIT_DLL(Curl)
     vm.addLocal(loc, "strerr", feralCurlEasyStrErrFromInt);
     vm.addLocal(loc, "newEasy", feralCurlEasyInit);
 
+    vm.addTypeFn<VarCurl>(loc, "perform", feralCurlEasyPerform);
+    vm.addTypeFn<VarCurl>(loc, "getHeader", feralCurlEasyGetHeaderValue);
     vm.addTypeFn<VarCurl>(loc, "getInfoNative", feralCurlEasyGetInfoNative);
     vm.addTypeFn<VarCurl>(loc, "setOptNative", feralCurlEasySetOptNative);
-    vm.addTypeFn<VarCurl>(loc, "perform", feralCurlEasyPerform);
     vm.addTypeFn<VarCurl>(loc, "setProgressCBTickNative", feralCurlSetProgressCBTick);
 
     setEnumVars(vm, loc);
@@ -984,6 +1045,20 @@ void setEnumVars(VirtualMachine &vm, ModuleLoc loc)
     vm.makeLocal<VarInt>(loc, "INFO_HTTPAUTH_USED", "", CURLINFO_HTTPAUTH_USED);
     vm.makeLocal<VarInt>(loc, "INFO_PROXYAUTH_USED", "", CURLINFO_PROXYAUTH_USED);
     vm.makeLocal<VarInt>(loc, "INFO_LASTONE", "", CURLINFO_LASTONE);
+
+    // Auth
+
+    vm.makeLocal<VarInt>(loc, "AUTH_BASIC", "", CURLAUTH_BASIC);
+    vm.makeLocal<VarInt>(loc, "AUTH_DIGEST", "", CURLAUTH_DIGEST);
+    vm.makeLocal<VarInt>(loc, "AUTH_DIGEST_IE", "", CURLAUTH_DIGEST_IE);
+    vm.makeLocal<VarInt>(loc, "AUTH_BEARER", "", CURLAUTH_BEARER);
+    vm.makeLocal<VarInt>(loc, "AUTH_NEGOTIATE", "", CURLAUTH_NEGOTIATE);
+    vm.makeLocal<VarInt>(loc, "AUTH_NTLM", "", CURLAUTH_NTLM);
+    vm.makeLocal<VarInt>(loc, "AUTH_NTLM_WB", "", CURLAUTH_NTLM_WB);
+    vm.makeLocal<VarInt>(loc, "AUTH_ANY", "", CURLAUTH_ANY);
+    vm.makeLocal<VarInt>(loc, "AUTH_ANYSAFE", "", CURLAUTH_ANYSAFE);
+    vm.makeLocal<VarInt>(loc, "AUTH_ONLY", "", CURLAUTH_ONLY);
+    vm.makeLocal<VarInt>(loc, "AUTH_AWS_SIGV4", "", CURLAUTH_AWS_SIGV4);
 }
 
 } // namespace fer
