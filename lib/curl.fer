@@ -22,16 +22,39 @@ let defaultProgressCB = fn(dlTotal, dlDone, ulTotal, ulDone) {
     io.fflush(io.stdout);
 };
 
+##################################################################################################
+########################################## CurlMultiTy ###########################################
+##################################################################################################
+
 "
-  fn(tick = 10) -> Nil
+  var.fn(opt, val = nil, va...) -> Int
+Sets the option `opt` in CurlMulti `var` as `val` (and all of `va`).
+Here, type of `val`/`va` are dependent on the `opt` being used.
+Returns the result as integer representing CURLMcode.
+"
+let setOpt in CurlMultiTy = fn(opt, val = nil, va...) {
+    return self.setOptNative(opt, val, va...);
+};
+
+##################################################################################################
+########################################## CurlEasyTy ############################################
+##################################################################################################
+
+"
+  var.fn(tick = 10) -> Nil
 Sets how many times (`tick`) must the C progress bar callback must be invoked before invoking the Feral callback.
 This exists for performance reasons. Increasing the `tick` means less times Feral callback is called.
 "
-let setProgressCBTick in CurlTy = fn(tick = 10) {
+let setProgressCBTick in CurlEasyTy = fn(tick = 10) {
     self.setProgressCBTickNative(tick);
 };
 
-# cannot be chained, returns CURLcode
-let setOpt in CurlTy = fn(opt, val = nil, va...) {
+"
+  var.fn(opt, val = nil, va...) -> Int
+Sets the option `opt` in CurlEasy `var` as `val` (and all of `va`).
+Here, type of `val`/`va` are dependent on the `opt` being used.
+Returns the result as integer representing CURLcode.
+"
+let setOpt in CurlEasyTy = fn(opt, val = nil, va...) {
     return self.setOptNative(opt, val, va...);
 };

@@ -11,111 +11,110 @@ void setEnumVars(VirtualMachine &vm, ModuleLoc loc);
 /////////////////////////////////////////// Callbacks ////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////////
 
-int curlProgressCallback(void *ptr, curl_off_t dlTotal, curl_off_t dlDone, curl_off_t ulTotal,
-                         curl_off_t ulDone)
+int curlEasyProgressCallback(void *ptr, curl_off_t dlTotal, curl_off_t dlDone, curl_off_t ulTotal,
+                             curl_off_t ulDone)
 {
     // ensure that the file to be downloaded is not empty
     // because that would cause a division by zero error later on
     if(dlTotal <= 0 && ulTotal <= 0) return 0;
 
-    CurlCallbackData &cbdata = *(CurlCallbackData *)ptr;
+    VarCurlEasy *c = (VarCurlEasy *)ptr;
 
-    if(!cbdata.curl->getProgressCB()) return 0;
+    if(!c->getCbVM() || !c->getProgressCB()) return 0;
 
-    size_t &intervalTick = cbdata.curl->getProgIntervalTick();
-    if(intervalTick < cbdata.curl->getProgIntervalTickMax()) {
+    size_t &intervalTick = c->getProgIntervalTick();
+    if(intervalTick < c->getProgIntervalTickMax()) {
         ++intervalTick;
         return 0;
     }
     intervalTick = 0;
 
-    VarVec *argsVar = cbdata.curl->getProgressCBArgs();
-    as<VarFlt>(argsVar->at(1))->setVal(dlTotal);
-    as<VarFlt>(argsVar->at(2))->setVal(dlDone);
-    as<VarFlt>(argsVar->at(3))->setVal(ulTotal);
-    as<VarFlt>(argsVar->at(4))->setVal(ulDone);
-    if(!cbdata.curl->getProgressCB()->call(cbdata.vm, cbdata.loc, argsVar->getVal(), nullptr)) {
-        cbdata.vm.fail(cbdata.loc, "failed to call progress callback, check error above");
+    VirtualMachine &vm = *c->getCbVM();
+    ModuleLoc loc      = c->getCbLoc();
+    VarClosure *progCb = c->getProgressCB();
+    VarFlt dt(loc, dlTotal), dd(loc, dlDone), ut(loc, ulTotal), ud(loc, ulDone);
+    vm.incVarRef(&dt);
+    vm.incVarRef(&dd);
+    vm.incVarRef(&ut);
+    vm.incVarRef(&ud);
+    Array<Var *, 5> args{nullptr, &dt, &dd, &ut, &ud};
+    Var *res = nullptr;
+    if(!vm.callVarAndExpect<VarNil>(loc, "progCb", progCb, res, args, nullptr)) {
+        vm.fail(loc, "failed to call progress callback, check error above");
         return 1;
     }
+    vm.decVarRef(res);
     return 0;
 }
 
-size_t curlWriteCallback(char *ptr, size_t size, size_t nmemb, void *userdata)
+size_t curlEasyWriteCallback(char *ptr, size_t size, size_t nmemb, void *userdata)
 {
-    CurlCallbackData &cbdata = *(CurlCallbackData *)userdata;
-    if(!cbdata.curl->getWriteCB()) return size * nmemb; // returning zero is an error
+    VarCurlEasy *c = (VarCurlEasy *)userdata;
+    if(!c->getCbVM() || !c->getWriteCB()) return size * nmemb; // returning zero is an error
 
-    VarVec *argsVar = cbdata.curl->getWriteCBArgs();
-    as<VarStr>(argsVar->at(1))->setVal(StringRef(ptr, size * nmemb));
-    if(!cbdata.curl->getWriteCB()->call(cbdata.vm, cbdata.loc, argsVar->getVal(), nullptr)) {
-        cbdata.vm.fail(cbdata.loc, "failed to call write callback, check error above");
+    VirtualMachine &vm  = *c->getCbVM();
+    ModuleLoc loc       = c->getCbLoc();
+    VarClosure *writeCb = c->getWriteCB();
+    VarBytebuffer buf(loc, 0, nmemb * size, (unsigned char *)ptr);
+    vm.incVarRef(&buf);
+    Array<Var *, 2> args{nullptr, &buf};
+    Var *res = nullptr;
+    if(!vm.callVarAndExpect<VarNil>(loc, "writeCb", writeCb, res, args, nullptr)) {
+        vm.fail(loc, "failed to call write callback, check error above");
         return 0;
     }
+    vm.decVarRef(res);
     return size * nmemb;
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
-/////////////////////////////////////////// VarCurl //////////////////////////////////////////////
+///////////////////////////////////////// VarCurlEasy ////////////////////////////////////////////
 //////////////////////////////////////////////////////////////////////////////////////////////////
 
-VarCurl::VarCurl(ModuleLoc loc, CURL *val)
-    : Var(loc), val(val), progCB(nullptr), writeCB(nullptr), progCBArgs(nullptr),
-      writeCBArgs(nullptr), progIntervalTick(0),
-      progIntervalTickMax(CURL_DEFAULT_PROGRESS_INTERVAL_TICK_MAX)
+VarCurlEasy::VarCurlEasy(ModuleLoc loc, CURL *val)
+    : Var(loc), val(val), cbdata(nullptr, loc), progCB(nullptr), writeCB(nullptr),
+      progIntervalTick(0), progIntervalTickMax(CURL_DEFAULT_PROGRESS_INTERVAL_TICK_MAX), done(false)
 {}
-VarCurl::~VarCurl()
+VarCurlEasy::~VarCurlEasy()
 {
     clearMimeData();
     curl_easy_cleanup(val);
 }
 
-void VarCurl::onCreate(VirtualMachine &vm)
+void VarCurlEasy::onCreate(VirtualMachine &vm) {}
+void VarCurlEasy::onDestroy(VirtualMachine &vm)
 {
-    progCBArgs = vm.makeVar<VarVec>(getLoc(), 5, true);
-    progCBArgs->push(vm, nullptr, false);
-    progCBArgs->push(vm, vm.makeVar<VarFlt>(getLoc(), 0.0), true);
-    progCBArgs->push(vm, vm.makeVar<VarFlt>(getLoc(), 0.0), true);
-    progCBArgs->push(vm, vm.makeVar<VarFlt>(getLoc(), 0.0), true);
-    progCBArgs->push(vm, vm.makeVar<VarFlt>(getLoc(), 0.0), true);
-
-    writeCBArgs = vm.makeVar<VarVec>({}, 2, true);
-    writeCBArgs->push(vm, nullptr, false);
-    writeCBArgs->push(vm, vm.makeVar<VarStr>(getLoc(), ""), true);
-}
-void VarCurl::onDestroy(VirtualMachine &vm)
-{
-    vm.decVarRef(writeCBArgs);
-    vm.decVarRef(progCBArgs);
-    setProgressCB(vm, nullptr, {});
-    setWriteCB(vm, nullptr, {});
+    setProgressCB(vm, nullptr);
+    setWriteCB(vm, nullptr);
 }
 
-void VarCurl::setProgressCB(VirtualMachine &vm, VarFn *_progCB, Span<Var *> args)
+void VarCurlEasy::setCbData(VirtualMachine *vm, ModuleLoc loc)
+{
+    cbdata.vm  = vm;
+    cbdata.loc = loc;
+    curl_easy_setopt(val, CURLOPT_XFERINFODATA, this);
+    curl_easy_setopt(val, CURLOPT_WRITEDATA, this);
+}
+
+void VarCurlEasy::setProgressCB(VirtualMachine &vm, VarClosure *_progCB)
 {
     if(progCB) vm.decVarRef(progCB);
     progCB = _progCB;
     if(progCB) vm.incVarRef(progCB);
-    if(!progCBArgs) return;
-    while(progCBArgs->size() > 5) { progCBArgs->pop(vm, true); }
-    for(auto &arg : args) { progCBArgs->push(vm, arg, true); }
 }
-void VarCurl::setWriteCB(VirtualMachine &vm, VarFn *_writeCB, Span<Var *> args)
+void VarCurlEasy::setWriteCB(VirtualMachine &vm, VarClosure *_writeCB)
 {
     if(writeCB) vm.decVarRef(writeCB);
     writeCB = _writeCB;
     if(writeCB) vm.incVarRef(writeCB);
-    if(!writeCBArgs) return;
-    while(writeCBArgs->size() > 5) { writeCBArgs->pop(vm, true); }
-    for(auto &arg : args) { writeCBArgs->push(vm, arg, true); }
 }
 
-curl_mime *VarCurl::createMime(VirtualMachine &vm, ModuleLoc loc, Var *data)
+bool VarCurlEasy::createMime(VirtualMachine &vm, ModuleLoc loc, Var *data, curl_mime *&mime)
 {
-    if(data->is<VarMap>() && as<VarMap>(data)->getVal().empty()) return nullptr;
+    if(data->is<VarMap>() && as<VarMap>(data)->getVal().empty()) return true;
 
     mimelist.push_front(curl_mime_init(val));
-    curl_mime *mime = mimelist.front();
+    mime = mimelist.front();
     if(data->is<VarStr>()) {
         curl_mimepart *part = curl_mime_addpart(mime);
         curl_mime_filedata(part, as<VarStr>(data)->getVal().c_str());
@@ -128,7 +127,8 @@ curl_mime *VarCurl::createMime(VirtualMachine &vm, ModuleLoc loc, Var *data)
             if(!vm.callVarAndExpect<VarStr>(loc, "str", v, tmp, {})) {
                 curl_mime_free(mime);
                 mimelist.pop_front();
-                return nullptr;
+                mime = nullptr;
+                return false;
             }
             const String &str   = as<VarStr>(v)->getVal();
             curl_mimepart *part = curl_mime_addpart(mime);
@@ -137,9 +137,9 @@ curl_mime *VarCurl::createMime(VirtualMachine &vm, ModuleLoc loc, Var *data)
             vm.decVarRef(v);
         }
     }
-    return mime;
+    return true;
 }
-void VarCurl::clearMimeData()
+void VarCurlEasy::clearMimeData()
 {
     while(!mimelist.empty()) {
         curl_mime_free(mimelist.front());
@@ -147,12 +147,12 @@ void VarCurl::clearMimeData()
     }
 }
 
-curl_slist *VarCurl::createSList(VirtualMachine &vm, ModuleLoc loc, Var *data)
+bool VarCurlEasy::createSList(VirtualMachine &vm, ModuleLoc loc, Var *data, curl_slist *&lst)
 {
-    if(data->is<VarMap>() && as<VarMap>(data)->getVal().empty()) return nullptr;
+    if(data->is<VarMap>() && as<VarMap>(data)->getVal().empty()) return true;
 
     sllist.push_front(nullptr);
-    curl_slist *&lst = sllist.front();
+    lst = sllist.front();
     if(data->is<VarStr>()) {
         lst = curl_slist_append(lst, as<VarStr>(data)->getVal().c_str());
     } else {
@@ -164,7 +164,8 @@ curl_slist *VarCurl::createSList(VirtualMachine &vm, ModuleLoc loc, Var *data)
             if(!vm.callVarAndExpect<VarStr>(loc, "str", v, tmp, {})) {
                 curl_slist_free_all(lst);
                 sllist.pop_front();
-                return nullptr;
+                lst = nullptr;
+                return false;
             }
             const String &str = as<VarStr>(v)->getVal();
             tmpStr.clear();
@@ -175,9 +176,9 @@ curl_slist *VarCurl::createSList(VirtualMachine &vm, ModuleLoc loc, Var *data)
             vm.decVarRef(v);
         }
     }
-    return lst;
+    return true;
 }
-void VarCurl::clearSList()
+void VarCurlEasy::clearSList()
 {
     while(!sllist.empty()) {
         curl_slist_free_all(sllist.front());
@@ -185,9 +186,40 @@ void VarCurl::clearSList()
     }
 }
 
-CurlCallbackData::CurlCallbackData(ModuleLoc loc, VirtualMachine &vm, VarCurl *curl)
-    : loc(loc), vm(vm), curl(curl)
+//////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////// VarCurlMulti ////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////
+
+VarCurlMulti::VarCurlMulti(ModuleLoc loc, CURLM *val, size_t pollMs)
+    : Var(loc), val(val), pollMs(pollMs)
 {}
+VarCurlMulti::~VarCurlMulti() { curl_multi_cleanup(val); }
+
+void VarCurlMulti::onCreate(VirtualMachine &vm)
+{ easyHandles = vm.makeVar<VarVec>(getLoc(), 5, true); }
+void VarCurlMulti::onDestroy(VirtualMachine &vm) { vm.decVarRef(easyHandles); }
+
+void VarCurlMulti::addEasy(VirtualMachine &vm, VarCurlEasy *easy, bool iref)
+{
+    LockGuard<RecursiveMutex> _(mtx);
+    curl_multi_add_handle(val, easy->getVal());
+    easyHandles->push(vm, easy, iref);
+}
+
+VarCurlEasy *VarCurlMulti::remEasy(VirtualMachine &vm, ModuleLoc loc, CURL *easy, bool dref)
+{
+    LockGuard<RecursiveMutex> _(mtx);
+    auto &handles = easyHandles->getVal();
+    for(size_t i = 0; i < handles.size(); ++i) {
+        VarCurlEasy *h = as<VarCurlEasy>(easyHandles->at(i));
+        if(h->getVal() != easy) continue;
+        curl_multi_remove_handle(val, easy);
+        easyHandles->erase(vm, i, dref);
+        return h;
+    }
+    vm.fail(loc, "failed to get easy handle for the CURL C object");
+    return nullptr;
+}
 
 //////////////////////////////////////////////////////////////////////////////////////////////////
 /////////////////////////////////////////// Functions ////////////////////////////////////////////
@@ -202,73 +234,110 @@ FERAL_FUNC(feralCurlGlobalTrace, 1, false,
     return vm.makeVar<VarInt>(loc, res);
 }
 
-FERAL_FUNC(
-    feralCurlEasyInit, 0, false,
-    "  fn() -> Curl\n"
-    "Creates and returns a Curl (Easy) instance which can be used to perform network operations.")
+FERAL_FUNC(feralCurlMultiStrErr, 1, false,
+           "  fn(errCode) -> Str\n"
+           "Returns the string representation of the curl multi error code `errCode`.")
 {
-    CURL *curl = curl_easy_init();
-    if(!curl) {
-        vm.fail(loc, "failed to run curl_easy_init()");
-        return nullptr;
-    }
-    curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, curlProgressCallback);
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curlWriteCallback);
-    return vm.makeVar<VarCurl>(loc, curl);
+    EXPECT(VarInt, args[1], "error code");
+    CURLMcode code = (CURLMcode)as<VarInt>(args[1])->getVal();
+    return vm.makeVar<VarStr>(loc, curl_multi_strerror(code));
 }
 
-FERAL_FUNC(feralCurlEasyStrErrFromInt, 1, false,
+FERAL_FUNC(feralCurlEasyStrErr, 1, false,
            "  fn(errCode) -> Str\n"
-           "Returns the string representation of the error code `errCode`.")
+           "Returns the string representation of the curl easy error code `errCode`.")
 {
     EXPECT(VarInt, args[1], "error code");
     CURLcode code = (CURLcode)as<VarInt>(args[1])->getVal();
     return vm.makeVar<VarStr>(loc, curl_easy_strerror(code));
 }
 
-FERAL_FUNC(feralCurlEasyPerform, 0, false,
+//////////////////////////////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////// VarCurlMulti ////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////
+
+FERAL_FUNC(feralCurlMultiInit, 0, false,
+           "  fn(.kw) -> CurlMulti\n"
+           "Creates and returns a Curl Multi instance which can be used to create easy handles and "
+           "use them to perform network operations.\n"
+           "Takes the following optional keyword arguments:\n"
+           "- `poll = <int>` - duration in milliseconds to wait when polling. (default: 100)")
+{
+    CURLM *curl = curl_multi_init();
+    if(!curl) {
+        vm.fail(loc, "failed to run curl_multi_init()");
+        return nullptr;
+    }
+    size_t pollMs = 100;
+    if(Var *pollVar = assnArgs->getAttr("poll")) {
+        EXPECT(VarInt, pollVar, "poll duration in ms");
+        pollMs = as<VarInt>(pollVar)->getVal();
+    }
+    return vm.makeVar<VarCurlMulti>(loc, curl, pollMs);
+}
+
+FERAL_FUNC(curlMultiAddEasy, 1, true,
+           "  var.fn(easy...) -> Nil\n"
+           "Adds all `easy` instances to the multi handle `var`.")
+{
+    VarCurlMulti *m = as<VarCurlMulti>(args[0]);
+    for(size_t i = 1; i < args.size(); ++i) {
+        EXPECT(VarCurlEasy, args[i], "easy handle");
+        VarCurlEasy *c = as<VarCurlEasy>(args[i]);
+        m->addEasy(vm, c, true);
+    }
+    return vm.getNil();
+}
+
+FERAL_FUNC(curlMultiPerform, 0, false,
            "  var.fn() -> Int\n"
-           "Performs the required operations on the Curl object `var` and returns the status code "
-           "of the finished operation.")
+           "Performs the required operations on the Curl multi object `var`.\n"
+           "Returns the status code (CURLMcode) of the operation.")
 {
-    CURL *curl = as<VarCurl>(args[0])->getVal();
-    CurlCallbackData cbdata(loc, vm, as<VarCurl>(args[0]));
-    curl_easy_setopt(curl, CURLOPT_XFERINFODATA, &cbdata);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &cbdata);
-    return vm.makeVar<VarInt>(loc, curl_easy_perform(curl));
+    VarCurlMulti *m = as<VarCurlMulti>(args[0]);
+    LockGuard<RecursiveMutex> _(m->getMutex());
+    for(auto &h : m->getEasyHandles()->getVal()) as<VarCurlEasy>(h)->setCbData(&vm, loc);
+
+    int running   = 1;
+    CURLMcode res = curl_multi_perform(m->getVal(), &running);
+    if(running) res = curl_multi_poll(m->getVal(), NULL, 0, m->getPollMs(), NULL);
+
+    int queued = 0;
+    while(CURLMsg *msg = curl_multi_info_read(m->getVal(), &queued)) {
+        if(msg->msg != CURLMSG_DONE) continue;
+        VarCurlEasy *h = m->remEasy(vm, loc, msg->easy_handle, false);
+        if(!h) return nullptr;
+        h->setDone(true);
+        vm.decVarRef(h);
+    }
+    return vm.makeVar<VarInt>(loc, res);
 }
 
-FERAL_FUNC(feralCurlEasyGetHeaderValue, 1, false,
-           "  var.fn(name) -> Str | Nil\n"
-           "Get the value for the given header `name`.")
+FERAL_FUNC(curlMultiSetOptNative, 2, true,
+           "  var.fn(option, suboption/value, args...) -> Int\n"
+           "Sets the `option` in CurlMulti `var` as one/more "
+           "`suboption/value` and returns the integer result.\n"
+           "Here, type of `suboption/value` is dependent on the `option` being used.")
 {
-    EXPECT(VarStr, args[1], "header name");
-    VarCurl *curl      = as<VarCurl>(args[0]);
-    const String &name = as<VarStr>(args[1])->getVal();
-    struct curl_header *header;
-    int res = curl_easy_header(curl->getVal(), name.c_str(), 0, CURLH_HEADER, -1, &header);
-    if(res != CURLHE_OK) return vm.getNil();
-    return vm.makeVar<VarStr>(loc, header->value);
-}
+    EXPECT(VarInt, args[1], "option type (CURLMOPT_*)");
+    VarCurlMulti *m = as<VarCurlMulti>(args[0]);
+    CURLM *curl     = m->getVal();
+    int opt         = as<VarInt>(args[1])->getVal();
+    Var *arg        = args[2];
 
-FERAL_FUNC(feralCurlEasyGetInfoNative, 2, false,
-           "  var.fn(option, suboption) -> Int\n"
-           "Gets the info for the Curl `option` in the curl object `var`, possibly with a "
-           "`suboption`, and returns it as an integer.")
-{
-    EXPECT(VarInt, args[1], "option type (CURL_OPT_*)");
-    CURL *curl = as<VarCurl>(args[0])->getVal();
-    int opt    = as<VarInt>(args[1])->getVal();
-    Var *arg   = args[2];
-
-    int res = CURLE_OK;
+    CURLMcode res = CURLM_OK;
     // manually handle each of the options and work accordingly
     switch(opt) {
-    case CURLINFO_ACTIVESOCKET: {
+    case CURLMOPT_MAXCONNECTS:
+    case CURLMOPT_MAX_CONCURRENT_STREAMS:
+    case CURLMOPT_MAX_HOST_CONNECTIONS:
+    case CURLMOPT_MAX_TOTAL_CONNECTIONS:
+    case CURLMOPT_NETWORK_CHANGED:
+    case CURLMOPT_PIPELINING:
+    case CURLMOPT_QUICK_EXIT:
+    case CURLMOPT_RESOLVE_THREADS_MAX: {
         EXPECT(VarInt, arg, "option value");
-        long sockfd;
-        res = curl_easy_getinfo(curl, (CURLINFO)opt, &sockfd);
-        as<VarInt>(arg)->setVal(sockfd);
+        res = curl_multi_setopt(curl, (CURLMoption)opt, as<VarInt>(arg)->getVal());
         break;
     }
     default: {
@@ -279,71 +348,219 @@ FERAL_FUNC(feralCurlEasyGetInfoNative, 2, false,
     return vm.makeVar<VarInt>(loc, res);
 }
 
-FERAL_FUNC(feralCurlEasySetOptNative, 2, true,
-           "  var.fn(option, suboption/value...) -> Int\n"
+FERAL_FUNC(curlMultiEmpty, 0, false,
+           "  var.fn() -> Bool\n"
+           "Returns `true` if there is no easy handle in the multi instance `var`.")
+{
+    VarCurlMulti *m = as<VarCurlMulti>(args[0]);
+    LockGuard<RecursiveMutex> _(m->getMutex());
+    return m->getEasyHandles()->empty() ? vm.getTrue() : vm.getFalse();
+}
+
+FERAL_FUNC(curlMultiLen, 0, false,
+           "  var.fn() -> Bool\n"
+           "Returns number of easy handles contained in the multi instance `var`.")
+{
+    VarCurlMulti *m = as<VarCurlMulti>(args[0]);
+    LockGuard<RecursiveMutex> _(m->getMutex());
+    return vm.makeVar<VarInt>(loc, m->getEasyHandles()->size());
+}
+
+//////////////////////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////// VarCurlEasy ////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////////////////////////////
+
+FERAL_FUNC(feralCurlEasyInit, 0, false,
+           "  fn() -> CurlEasy\n"
+           "Creates and returns a Curl (Easy) instance which can be used to perform network "
+           "operations by calling perform() on it or adding it to a multi handle.")
+{
+    CURL *c = curl_easy_init();
+    if(!c) {
+        vm.fail(loc, "curl_easy_init() failed");
+        return nullptr;
+    }
+    curl_easy_setopt(c, CURLOPT_XFERINFOFUNCTION, curlEasyProgressCallback);
+    curl_easy_setopt(c, CURLOPT_WRITEFUNCTION, curlEasyWriteCallback);
+    return vm.makeVar<VarCurlEasy>(loc, c);
+}
+
+FERAL_FUNC(curlEasyPerform, 0, false,
+           "  var.fn() -> Int\n"
+           "Performs the required operations on the Curl object `var` and returns the status code "
+           "(CURLcode) of the finished operation.")
+{
+    VarCurlEasy *c = as<VarCurlEasy>(args[0]);
+    c->setCbData(&vm, loc);
+    CURLcode res = curl_easy_perform(c->getVal());
+    c->setDone(true);
+    return vm.makeVar<VarInt>(loc, res);
+}
+
+FERAL_FUNC(curlEasyGetHeaderValue, 1, false,
+           "  var.fn(name) -> Str | Nil\n"
+           "Get the value for the given header `name`.")
+{
+    EXPECT(VarStr, args[1], "header name");
+    VarCurlEasy *curl  = as<VarCurlEasy>(args[0]);
+    const String &name = as<VarStr>(args[1])->getVal();
+    struct curl_header *header;
+    int res = curl_easy_header(curl->getVal(), name.c_str(), 0, CURLH_HEADER, -1, &header);
+    if(res != CURLHE_OK) return vm.getNil();
+    return vm.makeVar<VarStr>(loc, header->value);
+}
+
+FERAL_FUNC(curlEasyGetInfo, 1, false,
+           "  var.fn(option) -> Int | Str\n"
+           "Gets the info for the Curl `option` (CURLINFO_*) in the curl object `var`.\n"
+           "Returns it as an integer/string depending on the option.")
+{
+    EXPECT(VarInt, args[1], "option type (CURLINFO_*)");
+    CURL *curl = as<VarCurlEasy>(args[0])->getVal();
+    int opt    = as<VarInt>(args[1])->getVal();
+
+    // manually handle each of the options and work accordingly
+    switch(opt) {
+    // long / curl_off_t
+    case CURLINFO_RESPONSE_CODE:
+    case CURLINFO_HTTP_CONNECTCODE:
+    case CURLINFO_FILETIME:
+    case CURLINFO_REDIRECT_COUNT:
+    case CURLINFO_HEADER_SIZE:
+    case CURLINFO_REQUEST_SIZE:
+    case CURLINFO_SSL_VERIFYRESULT:
+    case CURLINFO_PROXY_SSL_VERIFYRESULT:
+    case CURLINFO_HTTPAUTH_AVAIL:
+    case CURLINFO_PROXYAUTH_AVAIL:
+    case CURLINFO_OS_ERRNO:
+    case CURLINFO_NUM_CONNECTS:
+    case CURLINFO_PRIMARY_PORT:
+    case CURLINFO_LOCAL_PORT:
+    case CURLINFO_CONDITION_UNMET:
+    case CURLINFO_RTSP_CLIENT_CSEQ:
+    case CURLINFO_RTSP_SERVER_CSEQ:
+    case CURLINFO_RTSP_CSEQ_RECV:
+    case CURLINFO_HTTP_VERSION:
+    case CURLINFO_FILETIME_T:
+    case CURLINFO_SIZE_UPLOAD_T:
+    case CURLINFO_SIZE_DOWNLOAD_T:
+    case CURLINFO_SPEED_DOWNLOAD_T:
+    case CURLINFO_SPEED_UPLOAD_T:
+    case CURLINFO_CONTENT_LENGTH_DOWNLOAD_T:
+    case CURLINFO_CONTENT_LENGTH_UPLOAD_T:
+    case CURLINFO_RETRY_AFTER:
+    case CURLINFO_TOTAL_TIME_T:
+    case CURLINFO_NAMELOOKUP_TIME_T:
+    case CURLINFO_CONNECT_TIME_T:
+    case CURLINFO_APPCONNECT_TIME_T:
+    case CURLINFO_PRETRANSFER_TIME_T:
+    case CURLINFO_STARTTRANSFER_TIME_T:
+    case CURLINFO_REDIRECT_TIME_T:
+    case CURLINFO_QUEUE_TIME_T: {
+        long val;
+        curl_easy_getinfo(curl, (CURLINFO)opt, &val);
+        return vm.makeVar<VarInt>(loc, val);
+    }
+    // char * (CURLINFO_STRING)
+    case CURLINFO_EFFECTIVE_URL:
+    case CURLINFO_CONTENT_TYPE:
+    case CURLINFO_REDIRECT_URL:
+    case CURLINFO_PRIMARY_IP:
+    case CURLINFO_LOCAL_IP:
+    case CURLINFO_FTP_ENTRY_PATH:
+    case CURLINFO_SCHEME:
+    case CURLINFO_RTSP_SESSION_ID:
+    case CURLINFO_CAPATH:
+    case CURLINFO_CAINFO:
+    case CURLINFO_REFERER: {
+        char *val;
+        curl_easy_getinfo(curl, (CURLINFO)opt, &val);
+        return vm.makeVar<VarStr>(loc, val);
+    }
+    // int (curl_socket_t)
+    case CURLINFO_ACTIVESOCKET: {
+        int val;
+        curl_easy_getinfo(curl, (CURLINFO)opt, &val);
+        return vm.makeVar<VarInt>(loc, val);
+    }
+    default: {
+        vm.fail(loc, "operation is not yet implemented");
+        return nullptr;
+    }
+    }
+}
+
+FERAL_FUNC(curlEasySetOptNative, 2, true,
+           "  var.fn(option, suboption/value, args...) -> Int\n"
            "Sets the `option` in Curl `var` as with one/more `suboption/value` and returns the "
            "integer result.\n"
            "Here, type and count of `suboption/value` are dependent on the `option` being used.")
 {
     EXPECT(VarInt, args[1], "option type (CURL_OPT_*)");
-    VarCurl *varCurl = as<VarCurl>(args[0]);
-    CURL *curl       = varCurl->getVal();
-    int opt          = as<VarInt>(args[1])->getVal();
-    Var *arg         = args[2];
+    VarCurlEasy *varCurl = as<VarCurlEasy>(args[0]);
+    CURL *curl           = varCurl->getVal();
+    int opt              = as<VarInt>(args[1])->getVal();
+    Var *arg             = args[2];
 
     int res = CURLE_OK;
     // manually handle each of the options and work accordingly
     switch(opt) {
     case CURLOPT_MIMEPOST: {
         EXPECT(VarMap, arg, "name-data pairs");
-        curl_mime *mime = varCurl->createMime(vm, loc, as<VarMap>(arg));
-        if(!mime) {
-            vm.fail(loc, "failed to create mime from the given map (possibly empty map)");
+        curl_mime *mime = nullptr;
+        if(!varCurl->createMime(vm, loc, as<VarMap>(arg), mime)) {
+            vm.fail(loc, "failed to create mime from the given map, see error above");
             return nullptr;
         }
-        res = curl_easy_setopt(curl, (CURLoption)opt, mime);
+        if(mime) res = curl_easy_setopt(curl, (CURLoption)opt, mime);
         break;
     }
     case CURLOPT_XFERINFOFUNCTION: {
         if(arg->is<VarNil>()) {
-            varCurl->setProgressCB(vm, nullptr, {});
+            varCurl->setProgressCB(vm, nullptr);
             break;
         }
-        EXPECT(VarFn, arg, "xfer info function");
-        VarFn *f = as<VarFn>(arg);
-        if(f->getParamCount() < 4) {
-            vm.fail(loc, "expected function to have at least 4",
-                    " parameters for this option, found: ", f->getParamCount());
-            return nullptr;
+        EXPECT_CALLABLE(arg, "xfer info function");
+        if(arg->is<VarFn>()) {
+            VarFn *f = as<VarFn>(arg);
+            if(f->getParamCount() < 4) {
+                vm.fail(loc, "expected function to have at least 4",
+                        " parameters for this option, found: ", f->getParamCount());
+                return nullptr;
+            }
         }
-        Span<Var *> cbArgs{args.begin() + 3, args.end()};
-        varCurl->setProgressCB(vm, f, cbArgs);
+        VarClosure *cl = vm.makeVar<VarClosure>(loc, arg);
+        for(size_t i = 3; i < args.size(); ++i) { cl->push(vm, args[i], true); }
+        varCurl->setProgressCB(vm, cl);
         break;
     }
     case CURLOPT_WRITEFUNCTION: {
         if(arg->is<VarNil>()) {
-            varCurl->setWriteCB(vm, nullptr, {});
+            varCurl->setWriteCB(vm, nullptr);
             break;
         }
-        EXPECT(VarFn, arg, "write function");
-        VarFn *f = as<VarFn>(arg);
-        if(f->getParamCount() < 1) {
-            vm.fail(loc, "expected function to have at least 1",
-                    " parameter for this option, found: ", f->getParamCount());
-            return nullptr;
+        EXPECT_CALLABLE(arg, "write function");
+        if(arg->is<VarFn>()) {
+            VarFn *f = as<VarFn>(arg);
+            if(f->getParamCount() < 1) {
+                vm.fail(loc, "expected function to have at least 1",
+                        " parameter for this option, found: ", f->getParamCount());
+                return nullptr;
+            }
         }
-        Span<Var *> cbArgs{args.begin() + 3, args.end()};
-        varCurl->setWriteCB(vm, f, cbArgs);
+        VarClosure *cl = vm.makeVar<VarClosure>(loc, arg);
+        for(size_t i = 3; i < args.size(); ++i) { cl->push(vm, args[i], true); }
+        varCurl->setWriteCB(vm, cl);
         break;
     }
     case CURLOPT_HTTPHEADER: {
         EXPECT(VarMap, arg, "name-data pairs");
-        curl_slist *lst = varCurl->createSList(vm, loc, as<VarMap>(arg));
-        if(!lst) {
-            vm.fail(loc, "failed to create slist from the given map (possibly empty map)");
+        curl_slist *lst = nullptr;
+        if(!varCurl->createSList(vm, loc, as<VarMap>(arg), lst)) {
+            vm.fail(loc, "failed to create slist from the given map");
             return nullptr;
         }
-        res = curl_easy_setopt(curl, (CURLoption)opt, lst);
+        if(lst) res = curl_easy_setopt(curl, (CURLoption)opt, lst);
         break;
     }
     // Ints
@@ -419,15 +636,23 @@ FERAL_FUNC(feralCurlEasySetOptNative, 2, true,
     return vm.makeVar<VarInt>(loc, res);
 }
 
-FERAL_FUNC(
-    feralCurlSetProgressCBTick, 1, false,
-    "  var.fn(tick) -> Nil\n"
-    "Sets the interval in number of calls to progress callback where the callback does nothing.")
+FERAL_FUNC(curlEasySetProgressCBTick, 1, false,
+           "  var.fn(tick) -> Nil\n"
+           "Sets the interval in number of calls to "
+           " progress callback where the callback does nothing.")
 {
     EXPECT(VarInt, args[1], "tick count");
-    VarCurl *curl = as<VarCurl>(args[0]);
+    VarCurlEasy *curl = as<VarCurlEasy>(args[0]);
     curl->setProgIntervalTickMax(as<VarInt>(args[1])->getVal());
     return vm.getNil();
+}
+
+FERAL_FUNC(curlEasyIsDone, 0, false,
+           "  var.fn() -> Bool\n"
+           "Returns `true` if the curl easy handle `var` is marked done.")
+{
+    VarCurlEasy *curl = as<VarCurlEasy>(args[0]);
+    return curl->isDone() ? vm.getTrue() : vm.getFalse();
 }
 
 INIT_DLL(Curl)
@@ -435,17 +660,27 @@ INIT_DLL(Curl)
     curl_global_init(CURL_GLOBAL_ALL);
 
     // Register the type names
-    vm.addLocalType<VarCurl>(loc, "Curl", "The Curl C library's type representation.");
+    vm.addLocalType<VarCurlMulti>(loc, "CurlMulti", "Curl library's multi type representation.");
+    vm.addLocalType<VarCurlEasy>(loc, "CurlEasy", "Curl library's easy type representation.");
 
     vm.addLocal(loc, "globalTrace", feralCurlGlobalTrace);
-    vm.addLocal(loc, "strerr", feralCurlEasyStrErrFromInt);
+    vm.addLocal(loc, "multiStrErr", feralCurlMultiStrErr);
+    vm.addLocal(loc, "easyStrErr", feralCurlEasyStrErr);
+    vm.addLocal(loc, "newMulti", feralCurlMultiInit);
     vm.addLocal(loc, "newEasy", feralCurlEasyInit);
 
-    vm.addTypeFn<VarCurl>(loc, "perform", feralCurlEasyPerform);
-    vm.addTypeFn<VarCurl>(loc, "getHeader", feralCurlEasyGetHeaderValue);
-    vm.addTypeFn<VarCurl>(loc, "getInfoNative", feralCurlEasyGetInfoNative);
-    vm.addTypeFn<VarCurl>(loc, "setOptNative", feralCurlEasySetOptNative);
-    vm.addTypeFn<VarCurl>(loc, "setProgressCBTickNative", feralCurlSetProgressCBTick);
+    vm.addTypeFn<VarCurlMulti>(loc, "addEasy", curlMultiAddEasy);
+    vm.addTypeFn<VarCurlMulti>(loc, "perform", curlMultiPerform);
+    vm.addTypeFn<VarCurlMulti>(loc, "setOptNative", curlMultiSetOptNative);
+    vm.addTypeFn<VarCurlMulti>(loc, "empty", curlMultiEmpty);
+    vm.addTypeFn<VarCurlMulti>(loc, "len", curlMultiLen);
+
+    vm.addTypeFn<VarCurlEasy>(loc, "perform", curlEasyPerform);
+    vm.addTypeFn<VarCurlEasy>(loc, "getHeader", curlEasyGetHeaderValue);
+    vm.addTypeFn<VarCurlEasy>(loc, "getInfo", curlEasyGetInfo);
+    vm.addTypeFn<VarCurlEasy>(loc, "setOptNative", curlEasySetOptNative);
+    vm.addTypeFn<VarCurlEasy>(loc, "setProgressCBTickNative", curlEasySetProgressCBTick);
+    vm.addTypeFn<VarCurlEasy>(loc, "done", curlEasyIsDone);
 
     setEnumVars(vm, loc);
 
@@ -1059,6 +1294,26 @@ void setEnumVars(VirtualMachine &vm, ModuleLoc loc)
     vm.makeLocal<VarInt>(loc, "AUTH_ANYSAFE", "", CURLAUTH_ANYSAFE);
     vm.makeLocal<VarInt>(loc, "AUTH_ONLY", "", CURLAUTH_ONLY);
     vm.makeLocal<VarInt>(loc, "AUTH_AWS_SIGV4", "", CURLAUTH_AWS_SIGV4);
+
+    // Multi
+
+    vm.makeLocal<VarInt>(loc, "M_OK", "", CURLM_OK);
+    vm.makeLocal<VarInt>(loc, "M_BAD_HANDLE", "", CURLM_BAD_HANDLE);
+    vm.makeLocal<VarInt>(loc, "M_BAD_EASY_HANDLE", "", CURLM_BAD_EASY_HANDLE);
+    vm.makeLocal<VarInt>(loc, "M_OUT_OF_MEMORY", "", CURLM_OUT_OF_MEMORY);
+    vm.makeLocal<VarInt>(loc, "M_INTERNAL_ERROR", "", CURLM_INTERNAL_ERROR);
+    vm.makeLocal<VarInt>(loc, "M_BAD_SOCKET", "", CURLM_BAD_SOCKET);
+    vm.makeLocal<VarInt>(loc, "M_UNKNOWN_OPTION", "", CURLM_UNKNOWN_OPTION);
+    vm.makeLocal<VarInt>(loc, "M_ADDED_ALREADY", "", CURLM_ADDED_ALREADY);
+    vm.makeLocal<VarInt>(loc, "M_RECURSIVE_API_CALL", "", CURLM_RECURSIVE_API_CALL);
+    vm.makeLocal<VarInt>(loc, "M_WAKEUP_FAILURE", "", CURLM_WAKEUP_FAILURE);
+    vm.makeLocal<VarInt>(loc, "M_BAD_FUNCTION_ARGUMENT", "", CURLM_BAD_FUNCTION_ARGUMENT);
+    vm.makeLocal<VarInt>(loc, "M_ABORTED_BY_CALLBACK", "", CURLM_ABORTED_BY_CALLBACK);
+    vm.makeLocal<VarInt>(loc, "M_UNRECOVERABLE_POLL", "", CURLM_UNRECOVERABLE_POLL);
+
+    // Msg
+
+    vm.makeLocal<VarInt>(loc, "MSG_DONE", "", CURLMSG_DONE);
 }
 
 } // namespace fer

@@ -3,31 +3,67 @@ let fs = import('std/fs');
 let os = import('std/os');
 let curl = import('curl/curl');
 
-let url = 'https://testfileorg.netwet.net/500MB-CZIPtestfile.org.zip';
-let out = '500MB'.path();
+let progress = import('progress/progress');
 
-let writeCB = fn(data, file) {
+let progressCb = fn(bar, dlTotal, dlDone, ulTotal, ulDone) {
+    let dlFraction = dlDone / dlTotal;
+    let lhs = (dlFraction * 100).round();
+    bar.update(lhs);
+};
+
+let url1 = 'https://getsamplefiles.com/download/tar/sample-3.tar';
+let url2 = 'https://getsamplefiles.com/download/zip/sample-3.zip';
+let url3 = 'https://getsamplefiles.com/download/zip/sample-3.zip';
+let out1 = '68MB-multi.tar'.path();
+let out2 = '21MB-multi.zip'.path();
+let out3 = '21MB-easy.zip'.path();
+
+let writeCB = fn(file, data) {
     io.fprint(file, data);
 };
 
-# scoped so that outFile is closed before attempting to remove it
-# otherwise, an error is produced on windows
-{
-    let outFile = fs.fopen(out, 'w+');
+let outFile1 = fs.fopen(out1, 'w+');
+let outFile2 = fs.fopen(out2, 'w+');
+let outFile3 = fs.fopen(out3, 'w+');
 
-    let c = curl.newEasy();
-    c.setOpt(curl.OPT_URL, url);
-    c.setOpt(curl.OPT_FOLLOWLOCATION, 1);
-    c.setOpt(curl.OPT_NOPROGRESS, 0);
-    c.setOpt(curl.OPT_XFERINFOFUNCTION, curl.defaultProgressCB);
-    c.setOpt(curl.OPT_WRITEFUNCTION, writeCB, outFile);
-    let result = c.perform();
-    io.println();
-    if result != curl.E_OK {
-        io.println('Failed to download file \'', url, '\' to \'', out, '\': ', curl.strerr(result));
-        feral.exit(result);
+{
+    let c1 = curl.newEasy();
+    c1.setOpt(curl.OPT_URL, url1);
+    c1.setOpt(curl.OPT_FOLLOWLOCATION, 1);
+    c1.setOpt(curl.OPT_NOPROGRESS, 0);
+    c1.setOpt(curl.OPT_XFERINFOFUNCTION, progressCb, progress.newBar(name = out1.str()));
+    c1.setOpt(curl.OPT_WRITEFUNCTION, writeCB, outFile1);
+    let c2 = curl.newEasy();
+    c2.setOpt(curl.OPT_URL, url2);
+    c2.setOpt(curl.OPT_FOLLOWLOCATION, 1);
+    c2.setOpt(curl.OPT_NOPROGRESS, 0);
+    c2.setOpt(curl.OPT_XFERINFOFUNCTION, progressCb, progress.newBar(name = out2.str()));
+    c2.setOpt(curl.OPT_WRITEFUNCTION, writeCB, outFile2);
+    let c = curl.newMulti();
+    c.addEasy(c1, c2);
+    while !c.empty() {
+        let res = c.perform();
+        if res != curl.M_OK {
+            io.println();
+            io.println('failed to perform: ', curl.multiStrErr(res));
+            feral.exit(res);
+        }
     }
 }
-io.println('Downloaded file: ', out);
-fs.remove(out);
-io.println('Removed downloaded file');
+{
+    let c3 = curl.newEasy();
+    c3.setOpt(curl.OPT_URL, url3);
+    c3.setOpt(curl.OPT_FOLLOWLOCATION, 1);
+    c3.setOpt(curl.OPT_NOPROGRESS, 0);
+    c3.setOpt(curl.OPT_XFERINFOFUNCTION, progressCb, progress.newBar(name = out3.str()));
+    c3.setOpt(curl.OPT_WRITEFUNCTION, writeCB, outFile3);
+    c3.perform();
+}
+
+outFile3.close();
+outFile2.close();
+outFile1.close();
+
+io.println('Downloaded files: ', out1, ', ', out2, ', ', out3);
+fs.remove(out1, out2, out3);
+io.println('Removed downloaded files');

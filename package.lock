@@ -5,5 +5,12 @@ deps = [
         url = "";
         constraint = ">=8.21.0";
         name = "libcurl";
+    },
+    {
+        isFeral = true;
+        sha256 = "b5681871983b59c0e890bd7969c7b16e0a73ec02b9f8f89748bb6f83c5ee7a1d";
+        url = "https://github.com/Feral-Lang/LibProgress/archive/refs/tags/0.2.0.tar.gz";
+        constraint = ">=0.2.0,<0.3.0";
+        name = "Progress";
     }
 ];

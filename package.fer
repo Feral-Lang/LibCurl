@@ -12,6 +12,9 @@ let configure = fn(info) {
 
     pkg.requires('libcurl', version = '>=8.21.0');
 
+    # Only used by test :P
+    pkg.requires('Progress', version = '~0.2.0', feral = true);
+
     let curlTarget = pkg.addTarget('Curl');
     curlTarget.findHeaders(info.pkgRoot / 'lib', '(.*).hpp');
     curlTarget.findSources(info.pkgRoot / 'lib', '(.*).cpp');
