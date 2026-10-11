@@ -117,8 +117,8 @@ bool VarCurlEasy::createMime(VirtualMachine &vm, ModuleLoc loc, Var *data, curl_
     mime = mimelist.front();
     if(data->is<VarStr>()) {
         curl_mimepart *part = curl_mime_addpart(mime);
-        curl_mime_filedata(part, as<VarStr>(data)->getVal().c_str());
-        curl_mime_filename(part, as<VarStr>(data)->getVal().c_str());
+        curl_mime_filedata(part, as<VarStr>(data)->cStr());
+        curl_mime_filename(part, as<VarStr>(data)->cStr());
     } else {
         VarMap *map = as<VarMap>(data);
         for(auto &item : map->getVal()) {
@@ -130,10 +130,10 @@ bool VarCurlEasy::createMime(VirtualMachine &vm, ModuleLoc loc, Var *data, curl_
                 mime = nullptr;
                 return false;
             }
-            const String &str   = as<VarStr>(v)->getVal();
+            StringRef str       = as<VarStr>(v)->getVal();
             curl_mimepart *part = curl_mime_addpart(mime);
             curl_mime_name(part, item.first.c_str());
-            curl_mime_data(part, str.c_str(), str.size());
+            curl_mime_data(part, str.data(), str.size());
             vm.decVarRef(v);
         }
     }
@@ -154,7 +154,7 @@ bool VarCurlEasy::createSList(VirtualMachine &vm, ModuleLoc loc, Var *data, curl
     sllist.push_front(nullptr);
     lst = sllist.front();
     if(data->is<VarStr>()) {
-        lst = curl_slist_append(lst, as<VarStr>(data)->getVal().c_str());
+        lst = curl_slist_append(lst, as<VarStr>(data)->cStr());
     } else {
         String tmpStr;
         VarMap *map = as<VarMap>(data);
@@ -167,11 +167,11 @@ bool VarCurlEasy::createSList(VirtualMachine &vm, ModuleLoc loc, Var *data, curl
                 lst = nullptr;
                 return false;
             }
-            const String &str = as<VarStr>(v)->getVal();
+            const char *str = as<VarStr>(v)->cStr();
             tmpStr.clear();
             tmpStr += item.first;
             tmpStr += ": ";
-            tmpStr += str.c_str();
+            tmpStr += str;
             lst = curl_slist_append(lst, tmpStr.c_str());
             vm.decVarRef(v);
         }
@@ -230,7 +230,7 @@ FERAL_FUNC(feralCurlGlobalTrace, 1, false,
            "Sets the global `trace` config for the curl library.")
 {
     EXPECT(VarStr, args[1], "trace config");
-    int res = curl_global_trace(as<VarStr>(args[1])->getVal().c_str());
+    int res = curl_global_trace(as<VarStr>(args[1])->cStr());
     return vm.makeVar<VarInt>(loc, res);
 }
 
@@ -402,10 +402,10 @@ FERAL_FUNC(curlEasyGetHeaderValue, 1, false,
            "Get the value for the given header `name`.")
 {
     EXPECT(VarStr, args[1], "header name");
-    VarCurlEasy *curl  = as<VarCurlEasy>(args[0]);
-    const String &name = as<VarStr>(args[1])->getVal();
+    VarCurlEasy *curl = as<VarCurlEasy>(args[0]);
+    const char *name  = as<VarStr>(args[1])->cStr();
     struct curl_header *header;
-    int res = curl_easy_header(curl->getVal(), name.c_str(), 0, CURLH_HEADER, -1, &header);
+    int res = curl_easy_header(curl->getVal(), name, 0, CURLH_HEADER, -1, &header);
     if(res != CURLHE_OK) return vm.getNil();
     return vm.makeVar<VarStr>(loc, header->value);
 }
@@ -625,7 +625,7 @@ FERAL_FUNC(curlEasySetOptNative, 2, true,
     case CURLOPT_CUSTOMREQUEST:
     case CURLOPT_COPYPOSTFIELDS: {
         EXPECT(VarStr, arg, "option value");
-        res = curl_easy_setopt(curl, (CURLoption)opt, as<VarStr>(arg)->getVal().c_str());
+        res = curl_easy_setopt(curl, (CURLoption)opt, as<VarStr>(arg)->cStr());
         break;
     }
     default: {

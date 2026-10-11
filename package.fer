@@ -5,8 +5,8 @@ let configure = fn(info) {
     let pkg = package.new(
         'Curl',
         desc = 'Curl C library bindings for Feral.',
-        version = '0.2.0',
-        feral = '>=2.2.1',
+        version = '0.2.1',
+        feral = '>=2.6.0',
         author = vec.new('Chirag-Khandelwal <github@mail.chiragkh.me>')
     );
 
